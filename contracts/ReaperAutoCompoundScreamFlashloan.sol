@@ -3,6 +3,8 @@
 import "./abstract/ReaperBaseStrategy.sol";
 import "./interfaces/IUniswapRouter.sol";
 import "./interfaces/IPaymentRouter.sol";
+import "./interfaces/IFlashLoanRecipient.sol";
+import "./interfaces/IFlashLoans.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 pragma solidity 0.8.9;
@@ -11,7 +13,7 @@ pragma solidity 0.8.9;
  * @dev This is a strategy to stake Boo into xBoo, and then stake xBoo in different pools to collect more rewards
  * The strategy will compound the pool rewards into Boo which will be deposited into the strategy for more yield.
  */
-contract ReaperAutoCompoundScreamFlashloan is ReaperBaseStrategy {
+contract ReaperAutoCompoundScreamFlashloan is ReaperBaseStrategy, IFlashLoanRecipient {
     using SafeERC20 for IERC20;
 
     /**
@@ -34,6 +36,7 @@ contract ReaperAutoCompoundScreamFlashloan is ReaperBaseStrategy {
         0xF491e7B69E4244ad4002BC14e878a34207E38c29;
     address public constant POOL_CONTROLLER =
         0x466eBD9EC2027776fa11a982E9BBe4F67aa6e86B;
+    address public constant BEETHOVEN_VAULT = 0x20dd72Ed959b6147912C2e529F0a0C651c33c9ce;
 
     /**
      * @dev Routes we take to swap tokens
@@ -83,6 +86,27 @@ contract ReaperAutoCompoundScreamFlashloan is ReaperBaseStrategy {
         address[] memory _strategists
     ) ReaperBaseStrategy(_vault, _feeRemitters, _strategists) {
         _giveAllowances();
+    }
+
+    function receiveFlashLoan(
+        IERC20[] memory tokens,
+        uint256[] memory amounts,
+        uint256[] memory feeAmounts,
+        bytes memory userData
+    ) external {
+        // Do stuff
+    }
+
+    function testFlashLoan() external {
+        IERC20[] memory tokens = new IERC20[](1);
+        uint256[] memory amounts = new uint256[](1);
+        bytes memory userData;
+
+        tokens[0] = IERC20(WFTM);
+        uint256 borrowAmount = 100000;
+        amounts[0] = borrowAmount;
+
+        IFlashLoans(BEETHOVEN_VAULT).flashLoan(this, tokens, amounts, userData);
     }
 
     /**
