@@ -3,7 +3,7 @@
 import "./abstract/ReaperBaseStrategy.sol";
 import "./interfaces/IUniswapRouter.sol";
 import "./interfaces/IPaymentRouter.sol";
-import "./interfaces/ISToken.sol";
+import "./interfaces/CErc20I.sol";
 import "./interfaces/IComptroller.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
@@ -26,7 +26,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant SCREAM = 0xe0654C8e6fd4D733349ac7E09f6f23DA256bF475;
     address public immutable want;
-    address public immutable scWant;
+    CErc20I public immutable scWant;
     
     /**
      * @dev Third Party Contracts:
@@ -61,10 +61,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         address[] memory _strategists,
         address _scWant
     ) ReaperBaseStrategy(_vault, _feeRemitters, _strategists) {
-        scWant = _scWant;
+        scWant = CErc20I(_scWant);
         markets = [_scWant];
-        comptroller = ISToken(scWant).comptroller();
-        want = ISToken(scWant).underlying();
+        comptroller = scWant.comptroller();
+        want = scWant.underlying();
         wftmToWantRoute = [WFTM, want];
 
         _giveAllowances();
@@ -116,12 +116,33 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     {
     }
 
-    /**
-     * @dev Function to calculate the total underlaying {XTAROT} held by the strat.
-     * It takes into account both the funds in hand, as the funds allocated in xBoo and the XStakingPoolController pools.
-     */
-    function balanceOf() public view override returns (uint256) {
-        return 0;
+    // calculate the total underlying {want} held by the strat.
+    function balanceOf() public override view returns (uint256) {
+        return balanceOfWant() + balanceOfPool();
+    }
+
+    // it calculates how much {want} this contract holds.
+    function balanceOfWant() public view returns (uint256) {
+        return IERC20(want).balanceOf(address(this));
+    }
+
+    //Returns the current position
+    //WARNING - this returns just the balance at last time someone touched the cToken token. Does not accrue interst in between
+    //cToken is very active so not normally an issue.
+    function balanceOfPool()
+        public
+        view
+        returns (uint256)
+    {
+        (
+            ,
+            uint256 ctokenBalance,
+            uint256 borrowBalance,
+            uint256 exchangeRate
+        ) = scWant.getAccountSnapshot(address(this));
+
+        uint256 deposits = ctokenBalance * exchangeRate / 1e18;
+        return deposits - borrowBalance;
     }
 
     /**

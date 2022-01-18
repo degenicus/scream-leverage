@@ -151,7 +151,7 @@ describe("Vaults", function () {
     });
   });
   describe("Vault Tests", function () {
-    xit("should allow deposits and account for them correctly", async function () {
+    it("should allow deposits and account for them correctly", async function () {
       const userBalance = await want.balanceOf(selfAddress);
       console.log(1);
       console.log(`userBalance: ${userBalance}`);
@@ -162,7 +162,7 @@ describe("Vaults", function () {
       const depositAmount = ethers.utils.parseEther(".1");
       console.log("depositAmount");
       console.log(depositAmount);
-      console.log(i);
+      console.log(3);
       await vault.connect(self).deposit(depositAmount);
       console.log(4);
       const newVaultBalance = await vault.balance();
@@ -180,9 +180,8 @@ describe("Vaults", function () {
       const deductedAmount = userBalance.sub(newUserBalance);
       console.log("deductedAmount");
       console.log(deductedAmount);
-      const isSmallBalanceDifference = depositAmount.sub(newVaultBalance) < 5;
       expect(vaultBalance).to.equal(0);
-      expect(isSmallBalanceDifference).to.equal(true);
+      expect(depositAmount).to.equal(newVaultBalance);
       expect(deductedAmount).to.equal(depositAmount);
     });
     xit("should mint user their pool share", async function () {
