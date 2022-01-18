@@ -79,6 +79,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * xBoo is deposited into other pools to earn additional rewards
      */
     function deposit() public whenNotPaused {
+        uint256 _ltv = _calculateLTV();
+    }
+
+    function _calculateLTV() internal returns(uint256 ltv) {
         
     }
 
