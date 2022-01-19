@@ -194,7 +194,8 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
         _amount = _after.sub(_before);
         uint256 _amountAfterDeposit = (
             _amount.mul(PERCENT_DIVISOR.sub(depositFee))
-        ).div(PERCENT_DIVISOR);
+        )
+        .div(PERCENT_DIVISOR);
         uint256 shares = 0;
         if (totalSupply() == 0) {
             shares = _amountAfterDeposit;

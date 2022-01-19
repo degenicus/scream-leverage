@@ -22,12 +22,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * {want} - The vault token the strategy is maximizing
      * {scWant} - The Scream version of the want token
      */
-     address public constant WFTM =
-        0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
+    address public constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant SCREAM = 0xe0654C8e6fd4D733349ac7E09f6f23DA256bF475;
     address public immutable want;
     CErc20I public immutable scWant;
-    
+
     /**
      * @dev Third Party Contracts:
      * {UNI_ROUTER} - the UNI_ROUTER for target DEX
@@ -44,7 +43,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     address[] public screamToWftmRoute = [SCREAM, WFTM];
     address[] public wftmToWantRoute;
-    
+
     /**
      * @dev Scream variables
      * {markets} - Contains the Scream tokens to farm, used to enter markets and claim Scream
@@ -82,17 +81,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 _ltv = _calculateLTV();
     }
 
-    function _calculateLTV() internal returns(uint256 ltv) {
-        
-    }
+    function _calculateLTV() internal returns (uint256 ltv) {}
 
     /**
      * @dev Withdraws funds and sents them back to the vault.
      * It withdraws {XTAROT} from the XStakingPoolController pools.
      * The available {XTAROT} minus fees is returned to the vault.
      */
-    function withdraw(uint256 _amount) external {
-    }
+    function withdraw(uint256 _amount) external {}
 
     /**
      * @dev Core function of the strat, in charge of collecting and re-investing rewards.
@@ -131,16 +127,15 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function _swapRewardsToWftm() internal returns (uint256 profit) {
         uint256 wftmBalBefore = IERC20(WFTM).balanceOf(address(this));
         uint256 screamBal = IERC20(SCREAM).balanceOf(address(this));
-        if (screamBal != 0 ) 
-        {
+        if (screamBal != 0) {
             IUniswapRouter(UNI_ROUTER)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                    screamBal,
-                    0,
-                    screamToWftmRoute,
-                    address(this),
-                    block.timestamp + 600
-                );
+                screamBal,
+                0,
+                screamToWftmRoute,
+                address(this),
+                block.timestamp + 600
+            );
         }
         uint256 wftmBalAfter = IERC20(WFTM).balanceOf(address(this));
         profit = wftmBalAfter - wftmBalBefore;
@@ -155,11 +150,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         view
         override
         returns (uint256 profit, uint256 callFeeToUser)
-    {
-    }
+    {}
 
     // calculate the total underlying {want} held by the strat.
-    function balanceOf() public override view returns (uint256) {
+    function balanceOf() public view override returns (uint256) {
         return balanceOfWant() + balanceOfPool();
     }
 
@@ -171,11 +165,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     //Returns the current position
     //WARNING - this returns just the balance at last time someone touched the cToken token. Does not accrue interst in between
     //cToken is very active so not normally an issue.
-    function balanceOfPool()
-        public
-        view
-        returns (uint256)
-    {
+    function balanceOfPool() public view returns (uint256) {
         (
             ,
             uint256 ctokenBalance,
@@ -183,7 +173,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             uint256 exchangeRate
         ) = scWant.getAccountSnapshot(address(this));
 
-        uint256 deposits = ctokenBalance * exchangeRate / 1e18;
+        uint256 deposits = (ctokenBalance * exchangeRate) / 1e18;
         return deposits - borrowBalance;
     }
 
@@ -191,8 +181,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
      * vault, ready to be migrated to the new strat.
      */
-    function retireStrat() external {
-    }
+    function retireStrat() external {}
 
     /**
      * @dev Pauses deposits. Withdraws all funds from the AceLab contract, leaving rewards behind.
@@ -229,8 +218,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * {WFTM} allowance for the {UNI_ROUTER}
      * in addition to allowance to all pool rewards for the {UNI_ROUTER}.
      */
-    function _giveAllowances() internal {
-    }
+    function _giveAllowances() internal {}
 
     /**
      * @dev Removes all allowance of {stakingToken} for the {xToken} contract,
@@ -238,6 +226,5 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * {wftm} allowance for the {uniRouter}
      * in addition to allowance to all pool rewards for the {uniRouter}.
      */
-    function _removeAllowances() internal {
-    }
+    function _removeAllowances() internal {}
 }

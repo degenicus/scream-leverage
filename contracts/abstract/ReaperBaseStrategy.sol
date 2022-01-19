@@ -175,9 +175,9 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
             i--
         ) {
             uint256 projectedYearlyProfit = harvestLog[i]
-                .profit
-                .mul(ONE_YEAR)
-                .div(harvestLog[i].timeSinceLastHarvest);
+            .profit
+            .mul(ONE_YEAR)
+            .div(harvestLog[i].timeSinceLastHarvest);
             runningAPRSum = runningAPRSum.add(
                 projectedYearlyProfit.mul(PERCENT_DIVISOR).div(
                     harvestLog[i].tvl
@@ -212,9 +212,9 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable {
             i--
         ) {
             uint256 projectedYearlyProfit = harvestLog[i]
-                .profit
-                .mul(ONE_YEAR)
-                .div(harvestLog[i].timeSinceLastHarvest);
+            .profit
+            .mul(ONE_YEAR)
+            .div(harvestLog[i].timeSinceLastHarvest);
             runningAPRSum = runningAPRSum.add(
                 projectedYearlyProfit.mul(PERCENT_DIVISOR).div(
                     harvestLog[i].tvl

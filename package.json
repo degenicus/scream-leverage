@@ -4,7 +4,9 @@
   "description": "A single staking leverage farming strategy for Scream using flashloans",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint:sol": "solhint --config ./.solhint.json --max-warnings 0 -f table contracts/**/*.sol",
+    "prettier:sol": "prettier --write contracts/**/*.sol"
   },
   "repository": {
     "type": "git",
