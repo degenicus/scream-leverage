@@ -106,12 +106,23 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function _harvestCore() internal override {
         //todo
-        //_claimRewards();
+        _claimRewards();
         //  profit = _swapRewardToWftm();
         //  profit = _adjustPosition(profit);
         //  _chargeFees(profit);
         //  _swapToWant();
         //  deposit();
+    }
+
+    /**
+     * @dev Core harvest function.
+     * Get rewards from markets entered
+     */
+    function _claimRewards() internal {
+        CTokenI[] memory tokens = new CTokenI[](1);
+        tokens[0] = scWant;
+
+        IComptroller(comptroller).claimComp(address(this), tokens);
     }
 
     /**
