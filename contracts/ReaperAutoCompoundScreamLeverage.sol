@@ -107,7 +107,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function _harvestCore() internal override {
         //todo
         _claimRewards();
-        //  profit = _swapRewardToWftm();
+        uint256 profit = _swapRewardsToWftm();
         //  profit = _adjustPosition(profit);
         //  _chargeFees(profit);
         //  _swapToWant();
@@ -123,6 +123,27 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         tokens[0] = scWant;
 
         IComptroller(comptroller).claimComp(address(this), tokens);
+    }
+
+    /**
+     * @dev Core harvest function.
+     */
+    function _swapRewardsToWftm() internal returns (uint256 profit) {
+        uint256 wftmBalBefore = IERC20(WFTM).balanceOf(address(this));
+        uint256 screamBal = IERC20(SCREAM).balanceOf(address(this));
+        if (screamBal != 0 ) 
+        {
+            IUniswapRouter(UNI_ROUTER)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                    screamBal,
+                    0,
+                    screamToWftmRoute,
+                    address(this),
+                    block.timestamp + 600
+                );
+        }
+        uint256 wftmBalAfter = IERC20(WFTM).balanceOf(address(this));
+        profit = wftmBalAfter - wftmBalBefore;
     }
 
     /**
