@@ -75,7 +75,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Function that puts the funds to work.
      * It gets called whenever someone deposits in the strategy's vault contract.
-     * It deposits {XTAROT} into xBoo (BooMirrorWorld) to farm {xBoo} and finally,
+     * It mints {want} into xBoo (BooMirrorWorld) to farm {xBoo} and finally,
      * xBoo is deposited into other pools to earn additional rewards
      */
     function deposit() public whenNotPaused {
@@ -96,12 +96,22 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     /**
      * @dev Core function of the strat, in charge of collecting and re-investing rewards.
-     * 1. It claims rewards from the XStakingPoolController pools and estimated the current yield for each pool.
-     * 2. It charges the system fees to simplify the split.
-     * 3. It swaps the {WFTM} token for {Boo} which is deposited into {xBoo}
-     * 4. It distributes the xBoo using a yield optimization algorithm into various pools.
+     * 1. Claims {REWARD_TOKEN} from the comptroller.
+     * 2. Swaps {REWARD_TOKEN} to {WFTM}.
+     * 2. Adjusts the position if necessary.
+     * 3. Claims fees for the harvest caller and treasury.
+            The strat does not need to try to claim fees from the {WANT} as borrow APY > lending APY
+     * 4. Swaps the {WFTM} token for {WANT}
+     * 5. Deposits.
      */
     function _harvestCore() internal override {
+        //todo
+        //_claimRewards();
+        //  profit = _swapRewardToWftm();
+        //  profit = _adjustPosition(profit);
+        //  _chargeFees(profit);
+        //  _swapToWant();
+        //  deposit();
     }
 
     /**
