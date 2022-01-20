@@ -81,7 +81,22 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 _ltv = _calculateLTV();
     }
 
-    function _calculateLTV() internal returns (uint256 ltv) {}
+    /**
+     * @dev Get position based on latest account snapshot
+     */
+    function getStoredPosition() public view returns (uint256, uint256) {
+        (, uint256 scTokenBalance, uint256 borrowed, uint256 exchangeRate )= scWant.getAccountSnapshot(address(this));
+        uint256 supplied = scTokenBalance * exchangeRate / 1e18;
+        return (supplied, borrowed);
+    }
+
+    /**
+     * @dev Get the most accurate information on the strategy's position, paying gas.
+     */
+     function _getLivePosition() internal returns (uint256 supplied, uint256 borrowed) {
+         supplied = scWant.balanceOfUnderlying(address(this));
+         borrowed = scWant.borrowBalanceStored(address(this));
+     }
 
     /**
      * @dev Withdraws funds and sents them back to the vault.
@@ -139,6 +154,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
         uint256 wftmBalAfter = IERC20(WFTM).balanceOf(address(this));
         profit = wftmBalAfter - wftmBalBefore;
+    }
+
+    /**
+     * @dev Core harvest function
+     * If the current LTV is above a certain range, use some of profit to increase supply and return to desired LTV
+     */
+    function _adjustPosition(uint256 profit) internal returns (uint256 profitLeft) {
+        (uint256 supplied, uint256 borrowed) = _getLivePosition();
     }
 
     /**
