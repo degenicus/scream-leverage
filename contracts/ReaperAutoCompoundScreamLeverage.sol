@@ -526,6 +526,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         override
         returns (uint256 profit, uint256 callFeeToUser)
     {
+        uint256 rewards = comptroller.compAccrued(address(this));
+        profit = IUniswapRouter(UNI_ROUTER).getAmountsOut(rewards, screamToWftmRoute)[1];
+        uint256 wftmFee = (profit * totalFee) / PERCENT_DIVISOR;
+        callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
+        profit -= wftmFee;
     }
 
     // calculate the total underlying {want} held by the strat.
