@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT
 
 pragma solidity 0.8.9;
+
+import './CTokenI.sol';
 interface IComptroller {
     function compAccrued(address user) external view returns (uint256 amount);
     function claimComp(address holder, address[] calldata _scTokens) external;
