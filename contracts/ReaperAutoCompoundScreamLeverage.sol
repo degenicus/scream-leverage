@@ -63,6 +63,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public targetLTV = 0.73 ether;
     uint256 public allowedLTVDrift = 0.01 ether;
     uint256 public balanceOfPool = 0;
+    uint256 public borrowDepth = 8;
+    uint256 public minWantToLeverage = 1000;
 
     /**
      * @dev Initializes the strategy. Sets parameters, saves routes, and gives allowances.
@@ -100,14 +102,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         if(_shouldLeverage(_ltv)) {
             console.log("_shouldLeverage");
-            // CErc20I(cWant).redeemUnderlying(minted);
             _leverMax();
             updateBalance();
         } else if (_shouldDeleverage(_ltv)) {
             console.log("_shouldDeleverage");
-        } else {
-            // LTV is in the acceptable range
-            console.log("do nothing");
+            _deleverage(0);
         }
     }
 
@@ -116,18 +115,15 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
 
-        uint256 minWant = 1000;
-        uint256 maxIterations = 8;
         uint256 realSupply = supplied - borrowed;
-        uint256 targetCollatRatio = 720000000000000000;
-        uint256 newBorrow = _getMaxBorrowFromSupplied(realSupply, targetCollatRatio);
+        uint256 newBorrow = _getMaxBorrowFromSupplied(realSupply, targetLTV);
         console.log("newBorrow: ", newBorrow);
         uint256 totalAmountToBorrow = newBorrow - borrowed;
         console.log("totalAmountToBorrow: ", totalAmountToBorrow);
 
         for (
                 uint8 i = 0;
-                i < maxIterations && totalAmountToBorrow > minWant;
+                i < borrowDepth && totalAmountToBorrow > minWantToLeverage;
                 i++
             ) {
                 console.log("i: ", i);
@@ -212,8 +208,29 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if (supplied == 0 || borrowed == 0) {
             return 0;
         }
-        ltv = uint256(1e18) * borrowed / supplied;
+        ltv = MANTISSA * borrowed / supplied;
         console.log("ltv: ", ltv);
+    }
+
+    function calculateLTV()
+        external
+        view
+        returns (uint256 ltv)
+    {
+        (
+            ,
+            uint256 cWantBalance,
+            uint256 borrowed,
+            uint256 exchangeRate
+        ) = cWant.getAccountSnapshot(address(this));
+
+        uint256 supplied = cWantBalance * exchangeRate / MANTISSA;
+
+        if (supplied == 0 || borrowed == 0) {
+            return 0;
+        }
+
+         ltv = MANTISSA * borrowed / supplied;
     }
 
     function _calculateLTVAfterWithdraw(uint256 _withdrawAmount) internal returns(uint256 ltv) {
@@ -338,21 +355,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         //     _amount,
         //     false
         // );
-        uint256 minWant = 1000;
-        uint256 iterations = 8;
 
         // //If there is no deficit we dont need to adjust position
         // //if the position change is tiny do nothing
-        if (newBorrow > minWant) {
+        if (newBorrow > minWantToLeverage) {
             uint256 i = 0;
-            //position will equal 0 unless we haven't been able to deleverage enough with flash loan
-            //if we are not in deficit we dont need to do flash loan
-            while (newBorrow > minWant + 100) {
+            while (newBorrow > minWantToLeverage + 100) {
                 console.log("while newBorrow: ", newBorrow);
                 newBorrow = newBorrow - _normalDeleverage(newBorrow);
                 i++;
                 //A limit set so we don't run out of gas
-                if (i >= iterations) {
+                if (i >= borrowDepth) {
                     notAll = true;
                     break;
                 }

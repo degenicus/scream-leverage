@@ -9,6 +9,8 @@ const moveTimeForward = async (seconds) => {
   await network.provider.send("evm_mine");
 };
 
+const toEther = (num) => ethers.utils.parseEther(num);
+
 describe("Vaults", function () {
   let Vault;
   let Strategy;
@@ -183,6 +185,21 @@ describe("Vaults", function () {
         depositAmount.sub(newVaultBalance) < smallDifference;
       expect(isSmallBalanceDifference).to.equal(true);
     });
+    it("should trigger deleveraging on deposit when LTV is too high", async function () {
+      const depositAmount = toEther("100");
+      await vault.connect(self).deposit(depositAmount);
+      const ltvBefore = await strategy.calculateLTV();
+      console.log(`ltvBefore: ${ltvBefore}`);
+      const allowedLTVDrift = toEther("0.01");
+      expect(ltvBefore).to.be.closeTo(toEther("0.73"), allowedLTVDrift);
+      const newLTV = toEther("0.6");
+      await strategy.setTargetLtv(newLTV);
+      const smallDepositAmount = toEther("1");
+      await vault.connect(self).deposit(smallDepositAmount);
+      const ltvAfter = await strategy.calculateLTV();
+      console.log(`ltvAfter: ${ltvAfter}`);
+      expect(ltvAfter).to.be.closeTo(newLTV, allowedLTVDrift);
+    });
     xit("should mint user their pool share", async function () {
       console.log("---------------------------------------------");
       const userBalance = await want.balanceOf(selfAddress);
@@ -313,7 +330,7 @@ describe("Vaults", function () {
       console.log(`estimatedGas: ${estimatedGas}`);
       await strategy.connect(self).harvest();
     });
-    it("should provide yield", async function () {
+    xit("should provide yield", async function () {
       const timeToSkip = 3600;
       const initialUserBalance = await want.balanceOf(selfAddress);
       const depositAmount = initialUserBalance.div(10);
