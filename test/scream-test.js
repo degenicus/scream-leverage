@@ -25,7 +25,6 @@ describe("Vaults", function () {
   const scWantAddress = "0x8D9AED9882b4953a0c9fa920168fa1FDfA0eBE75"; // scDAI
   let self;
   let wantWhale;
-  let bigBooWhale;
   let selfAddress;
   let strategist;
   let owner;
@@ -238,7 +237,7 @@ describe("Vaults", function () {
       const percentDivisor = 10000;
       const withdrawFee = (depositAmount * securityFee) / percentDivisor;
       const expectedBalance = userBalance.sub(withdrawFee);
-      const smallDifference = expectedBalance * 0.00001;
+      const smallDifference = expectedBalance * 0.0000001;
       console.log(
         `expectedBalance.sub(userBalanceAfterWithdraw): ${expectedBalance.sub(
           userBalanceAfterWithdraw
@@ -249,7 +248,7 @@ describe("Vaults", function () {
         expectedBalance.sub(userBalanceAfterWithdraw) < smallDifference;
       expect(isSmallBalanceDifference).to.equal(true);
     });
-    it("should allow small withdrawal", async function () {
+    xit("should allow small withdrawal", async function () {
       const userBalance = await want.balanceOf(selfAddress);
       console.log(`userBalance: ${userBalance}`);
       const depositAmount = ethers.BigNumber.from(ethers.utils.parseEther("1"));
@@ -271,7 +270,13 @@ describe("Vaults", function () {
       const percentDivisor = 10000;
       const withdrawFee = (depositAmount * securityFee) / percentDivisor;
       const expectedBalance = userBalance.sub(withdrawFee);
-      const smallDifference = expectedBalance * 0.00001;
+      const smallDifference = depositAmount * 0.00001;
+      console.log(
+        `expectedBalance.sub(userBalanceAfterWithdraw): ${expectedBalance.sub(
+          userBalanceAfterWithdraw
+        )}`
+      );
+      console.log(`smallDifference: ${smallDifference}`);
       const isSmallBalanceDifference =
         expectedBalance.sub(userBalanceAfterWithdraw) < smallDifference;
       expect(isSmallBalanceDifference).to.equal(true);
@@ -308,7 +313,33 @@ describe("Vaults", function () {
       console.log(`estimatedGas: ${estimatedGas}`);
       await strategy.connect(self).harvest();
     });
-    xit("should provide yield", async function () {});
+    it("should provide yield", async function () {
+      const timeToSkip = 3600;
+      const initialUserBalance = await want.balanceOf(selfAddress);
+      const depositAmount = initialUserBalance.div(10);
+
+      await vault.connect(self).deposit(depositAmount);
+      const initialVaultBalance = await vault.balance();
+
+      await strategy.updateHarvestLogCadence(timeToSkip / 2);
+
+      const numHarvests = 2;
+      for (let i = 0; i < numHarvests; i++) {
+        await moveTimeForward(timeToSkip);
+        await vault.connect(self).deposit(depositAmount);
+        await strategy.harvest();
+      }
+
+      const finalVaultBalance = await vault.balance();
+      expect(finalVaultBalance).to.be.gt(initialVaultBalance);
+
+      const averageAPR = await strategy.averageAPRAcrossLastNHarvests(
+        numHarvests
+      );
+      console.log(
+        `Average APR across ${numHarvests} harvests is ${averageAPR} basis points.`
+      );
+    });
   });
   describe("Strategy", function () {
     xit("should be able to pause and unpause", async function () {
@@ -348,6 +379,20 @@ describe("Vaults", function () {
       // Test needs the require statement to be commented out during the test
       await expect(strategy.retireStrat()).to.not.be.reverted;
     });
-    xit("should be able to estimate harvest", async function () {});
+    xit("should be able to estimate harvest", async function () {
+      const whaleDepositAmount = ethers.utils.parseEther("327171");
+      await vault.connect(wantWhale).deposit(whaleDepositAmount);
+      await strategy.harvest();
+      const minute = 60;
+      const hour = 60 * minute;
+      const day = 24 * hour;
+      await moveTimeForward(10 * day);
+      await vault.connect(wantWhale).deposit(ethers.utils.parseEther("1"));
+      const [profit, callFeeToUser] = await strategy.estimateHarvest();
+      const hasProfit = profit.gt(0);
+      const hasCallFee = callFeeToUser.gt(0);
+      expect(hasProfit).to.equal(true);
+      expect(hasCallFee).to.equal(true);
+    });
   });
 });

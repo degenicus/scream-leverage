@@ -443,6 +443,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * 5. Deposits. 
      */
     function _harvestCore() internal override {
+        console.log("_harvestCore()");
         _claimRewards();
         _swapRewardsToWftm();
         _chargeFees();
@@ -455,6 +456,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Get rewards from markets entered
      */
     function _claimRewards() internal {
+        console.log("_claimRewards()");
         CTokenI[] memory tokens = new CTokenI[](1);
         tokens[0] = cWant;
 
@@ -465,7 +467,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Core harvest function.
      */
     function _swapRewardsToWftm() internal {
+        console.log("_swapRewardsToWftm");
         uint256 screamBal = IERC20(SCREAM).balanceOf(address(this));
+        console.log("screamBal: ", screamBal);
         if (screamBal != 0) {
             IUniswapRouter(UNI_ROUTER)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
@@ -479,8 +483,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     function _chargeFees() internal {
+        console.log("_chargeFees()");
         uint256 wftmFee = IERC20(WFTM).balanceOf(address(this)) * totalFee / PERCENT_DIVISOR;
-
+        console.log("wftmFee: ", wftmFee);
         if (wftmFee != 0) {
             uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
             uint256 treasuryFeeToVault = (wftmFee * treasuryFee) /
@@ -503,6 +508,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     function _swapToWant() internal {
+        console.log("_swapToWant()");
         uint256 wftmBal = IERC20(WFTM).balanceOf(address(this));
         if (wftmBal != 0) {
             IUniswapRouter(UNI_ROUTER)
@@ -527,6 +533,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         returns (uint256 profit, uint256 callFeeToUser)
     {
         uint256 rewards = comptroller.compAccrued(address(this));
+        if (rewards == 0) {
+            return (0, 0);
+        }
         profit = IUniswapRouter(UNI_ROUTER).getAmountsOut(rewards, screamToWftmRoute)[1];
         uint256 wftmFee = (profit * totalFee) / PERCENT_DIVISOR;
         callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
@@ -542,6 +551,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     // it calculates how much {want} this contract holds.
     function balanceOfWant() public view returns (uint256) {
+        console.log("balanceOfWant()");
+        uint256 _balanceOfWant = IERC20(want).balanceOf(address(this));
+        console.log("_balanceOfWant: ", _balanceOfWant);
         return IERC20(want).balanceOf(address(this));
     }
 
