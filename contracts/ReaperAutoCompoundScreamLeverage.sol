@@ -433,15 +433,87 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             console.log("repayBorrow: ", deleveragedAmount);
         }
     }
-
     /**
      * @dev Core function of the strat, in charge of collecting and re-investing rewards.
-     * 1. It claims rewards from the XStakingPoolController pools and estimated the current yield for each pool.
-     * 2. It charges the system fees to simplify the split.
-     * 3. It swaps the {WFTM} token for {Boo} which is deposited into {xBoo}
-     * 4. It distributes the xBoo using a yield optimization algorithm into various pools.
+     * @notice Assumes the deposit will take care of the TVL rebalancing.
+     * 1. Claims {REWARD_TOKEN} from the comptroller.
+     * 2. Swaps {REWARD_TOKEN} to {WFTM}.
+     * 3. Claims fees for the harvest caller and treasury.
+     * 4. Swaps the {WFTM} token for {WANT}
+     * 5. Deposits. 
      */
     function _harvestCore() internal override {
+        _claimRewards();
+        _swapRewardsToWftm();
+        _chargeFees();
+        _swapToWant();
+        deposit();
+    }
+
+    /**
+     * @dev Core harvest function.
+     * Get rewards from markets entered
+     */
+    function _claimRewards() internal {
+        CTokenI[] memory tokens = new CTokenI[](1);
+        tokens[0] = cWant;
+
+        comptroller.claimComp(address(this), tokens);
+    }
+
+    /**
+     * @dev Core harvest function.
+     */
+    function _swapRewardsToWftm() internal {
+        uint256 screamBal = IERC20(SCREAM).balanceOf(address(this));
+        if (screamBal != 0) {
+            IUniswapRouter(UNI_ROUTER)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                screamBal,
+                0,
+                screamToWftmRoute,
+                address(this),
+                block.timestamp + 600
+            );
+        }
+    }
+
+    function _chargeFees() internal {
+        uint256 wftmFee = IERC20(WFTM).balanceOf(address(this)) * totalFee / PERCENT_DIVISOR;
+
+        if (wftmFee != 0) {
+            uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
+            uint256 treasuryFeeToVault = (wftmFee * treasuryFee) /
+                PERCENT_DIVISOR;
+            uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) /
+                PERCENT_DIVISOR;
+            treasuryFeeToVault -= feeToStrategist;
+
+            IERC20(WFTM).safeTransfer(msg.sender, callFeeToUser);
+            IERC20(WFTM).safeTransfer(treasury, treasuryFeeToVault);
+            IERC20(WFTM).safeIncreaseAllowance(
+                strategistRemitter,
+                feeToStrategist
+            );
+            IPaymentRouter(strategistRemitter).routePayment(
+                WFTM,
+                feeToStrategist
+            );
+        }
+    }
+
+    function _swapToWant() internal {
+        uint256 wftmBal = IERC20(WFTM).balanceOf(address(this));
+        if (wftmBal != 0) {
+            IUniswapRouter(UNI_ROUTER)
+                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                    wftmBal,
+                    0,
+                    wftmToWantRoute,
+                    address(this),
+                    block.timestamp + 600
+                );
+        }
     }
 
     /**
