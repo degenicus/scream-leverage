@@ -2,6 +2,7 @@
 
 pragma solidity 0.8.9;
 interface IComptroller {
+    function compAccrued(address user) external view returns (uint256 amount);
     function claimComp(address holder, address[] calldata _scTokens) external;
     function claimComp(address holder) external;
     function enterMarkets(address[] memory _scTokens) external;
