@@ -205,7 +205,7 @@ describe("Vaults", function () {
       console.log(`ltvAfter: ${ltvAfter}`);
       expect(ltvAfter).to.be.closeTo(newLTV, allowedLTVDrift);
     });
-    it("should not change leverage when LTV is within the allowed drift on deposit", async function () {
+    xit("should not change leverage when LTV is within the allowed drift on deposit", async function () {
       const depositAmount = toEther("1");
       const ltv = toEther("0.73");
       await vault.connect(self).deposit(depositAmount);
@@ -318,7 +318,7 @@ describe("Vaults", function () {
         toEther("0.0000001")
       );
     });
-    it("should trigger deleveraging on withdraw when LTV is too high", async function () {
+    xit("should trigger deleveraging on withdraw when LTV is too high", async function () {
       const startingLTV = toEther("0.7");
       await strategy.setTargetLtv(startingLTV);
       const depositAmount = toEther("100");
@@ -352,7 +352,7 @@ describe("Vaults", function () {
         toEther("0.0000001")
       );
     });
-    it("should not change leverage on withdraw when still in the allowed LTV", async function () {
+    xit("should not change leverage on withdraw when still in the allowed LTV", async function () {
       const startingLTV = toEther("0.7");
       await strategy.setTargetLtv(startingLTV);
       const depositAmount = toEther("100");
@@ -530,6 +530,13 @@ describe("Vaults", function () {
       const hasCallFee = callFeeToUser.gt(0);
       expect(hasProfit).to.equal(true);
       expect(hasCallFee).to.equal(true);
+    });
+    it("should be able to estimate blocks until liquidation", async function () {
+      const whaleDepositAmount = ethers.utils.parseEther("327171");
+      await vault.connect(wantWhale).deposit(whaleDepositAmount);
+      const blocksUntilLiquidation = await strategy.getblocksUntilLiquidation();
+      console.log(`blocksUntilLiquidation: ${blocksUntilLiquidation}`);
+      expect(blocksUntilLiquidation.gt(0)).to.equal(true);
     });
   });
 });

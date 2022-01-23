@@ -310,7 +310,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     {
         console.log("_getDesiredBorrow");
         //we want to use statechanging for safety
-        // (uint256 supplied, uint256 borrowed) = getLivePosition();
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
 
@@ -645,6 +644,19 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * in addition to allowance to all pool rewards for the {uniRouter}.
      */
     function _removeAllowances() internal {
+    }
+
+    //emergency function that we can use to deleverage manually if something is broken
+    function manualDeleverage(uint256 amount) external {
+        _onlyStrategistOrOwner();
+        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error");
+        require(cWant.repayBorrow(amount) == 0, "Scream returned an error");
+    }
+
+    //emergency function that we can use to deleverage manually if something is broken
+    function manualReleaseWant(uint256 amount) external {
+        _onlyStrategistOrOwner();
+        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error"); // dev: !manual-release-want
     }
 
     function setTargetLtv(uint256 _ltv)
