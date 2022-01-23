@@ -184,8 +184,13 @@ describe("Vaults", function () {
       const isSmallBalanceDifference =
         depositAmount.sub(newVaultBalance) < smallDifference;
       expect(isSmallBalanceDifference).to.equal(true);
+
+      const ltv = await strategy.calculateLTV();
+      console.log(`ltv: ${ltv}`);
+      const allowedLTVDrift = toEther("0.01");
+      expect(ltv).to.be.closeTo(toEther("0.73"), allowedLTVDrift);
     });
-    it("should trigger deleveraging on deposit when LTV is too high", async function () {
+    xit("should trigger deleveraging on deposit when LTV is too high", async function () {
       const depositAmount = toEther("100");
       await vault.connect(self).deposit(depositAmount);
       const ltvBefore = await strategy.calculateLTV();
@@ -199,6 +204,20 @@ describe("Vaults", function () {
       const ltvAfter = await strategy.calculateLTV();
       console.log(`ltvAfter: ${ltvAfter}`);
       expect(ltvAfter).to.be.closeTo(newLTV, allowedLTVDrift);
+    });
+    it("should not change leverage when LTV is within the allowed drift on deposit", async function () {
+      const depositAmount = toEther("1");
+      const ltv = toEther("0.73");
+      await vault.connect(self).deposit(depositAmount);
+      const ltvBefore = await strategy.calculateLTV();
+      console.log(`ltvBefore: ${ltvBefore}`);
+      const allowedLTVDrift = toEther("0.01");
+      expect(ltvBefore).to.be.closeTo(ltv, allowedLTVDrift);
+      const smallDepositAmount = allowedLTVDrift.div(2);
+      await vault.connect(self).deposit(smallDepositAmount);
+      const ltvAfter = await strategy.calculateLTV();
+      console.log(`ltvAfter: ${ltvAfter}`);
+      expect(ltvAfter).to.be.closeTo(ltv, allowedLTVDrift);
     });
     xit("should mint user their pool share", async function () {
       console.log("---------------------------------------------");
@@ -264,6 +283,107 @@ describe("Vaults", function () {
       const isSmallBalanceDifference =
         expectedBalance.sub(userBalanceAfterWithdraw) < smallDifference;
       expect(isSmallBalanceDifference).to.equal(true);
+    });
+    xit("should trigger leveraging on withdraw when LTV is too low", async function () {
+      const startingLTV = toEther("0.6");
+      await strategy.setTargetLtv(startingLTV);
+      const depositAmount = toEther("100");
+
+      await vault.connect(self).deposit(depositAmount);
+      const ltvBefore = await strategy.calculateLTV();
+      console.log(`ltvBefore: ${ltvBefore}`);
+      const allowedLTVDrift = toEther("0.01");
+      expect(ltvBefore).to.be.closeTo(startingLTV, allowedLTVDrift);
+      const newLTV = toEther("0.7");
+      await strategy.setTargetLtv(newLTV);
+      const smallWithdrawAmount = toEther("1");
+      const userBalance = await want.balanceOf(selfAddress);
+      await vault.connect(self).withdraw(smallWithdrawAmount);
+      const userBalanceAfterWithdraw = await want.balanceOf(selfAddress);
+      const ltvAfter = await strategy.calculateLTV();
+      console.log(`ltvAfter: ${ltvAfter}`);
+      expect(ltvAfter).to.be.closeTo(newLTV, allowedLTVDrift);
+
+      const securityFee = 10;
+      const percentDivisor = 10000;
+      const withdrawFee = smallWithdrawAmount
+        .mul(securityFee)
+        .div(percentDivisor);
+      const expectedBalance = userBalance
+        .add(smallWithdrawAmount)
+        .sub(withdrawFee);
+
+      expect(userBalanceAfterWithdraw).to.be.closeTo(
+        expectedBalance,
+        toEther("0.0000001")
+      );
+    });
+    it("should trigger deleveraging on withdraw when LTV is too high", async function () {
+      const startingLTV = toEther("0.7");
+      await strategy.setTargetLtv(startingLTV);
+      const depositAmount = toEther("100");
+
+      await vault.connect(self).deposit(depositAmount);
+      const ltvBefore = await strategy.calculateLTV();
+      console.log(`ltvBefore: ${ltvBefore}`);
+      const allowedLTVDrift = toEther("0.01");
+      expect(ltvBefore).to.be.closeTo(startingLTV, allowedLTVDrift);
+      const newLTV = toEther("0.6");
+      await strategy.setTargetLtv(newLTV);
+      const smallWithdrawAmount = toEther("1");
+      const userBalance = await want.balanceOf(selfAddress);
+      await vault.connect(self).withdraw(smallWithdrawAmount);
+      const userBalanceAfterWithdraw = await want.balanceOf(selfAddress);
+      const ltvAfter = await strategy.calculateLTV();
+      console.log(`ltvAfter: ${ltvAfter}`);
+      expect(ltvAfter).to.be.closeTo(newLTV, allowedLTVDrift);
+
+      const securityFee = 10;
+      const percentDivisor = 10000;
+      const withdrawFee = smallWithdrawAmount
+        .mul(securityFee)
+        .div(percentDivisor);
+      const expectedBalance = userBalance
+        .add(smallWithdrawAmount)
+        .sub(withdrawFee);
+
+      expect(userBalanceAfterWithdraw).to.be.closeTo(
+        expectedBalance,
+        toEther("0.0000001")
+      );
+    });
+    it("should not change leverage on withdraw when still in the allowed LTV", async function () {
+      const startingLTV = toEther("0.7");
+      await strategy.setTargetLtv(startingLTV);
+      const depositAmount = toEther("100");
+
+      await vault.connect(self).deposit(depositAmount);
+      const ltvBefore = await strategy.calculateLTV();
+      console.log(`ltvBefore: ${ltvBefore}`);
+      const allowedLTVDrift = toEther("0.01");
+      expect(ltvBefore).to.be.closeTo(startingLTV, allowedLTVDrift);
+
+      const userBalance = await want.balanceOf(selfAddress);
+      const smallWithdrawAmount = allowedLTVDrift.div(2);
+      await vault.connect(self).withdraw(smallWithdrawAmount);
+      const userBalanceAfterWithdraw = await want.balanceOf(selfAddress);
+      const ltvAfter = await strategy.calculateLTV();
+      console.log(`ltvAfter: ${ltvAfter}`);
+      expect(ltvAfter).to.be.closeTo(startingLTV, allowedLTVDrift);
+
+      const securityFee = 10;
+      const percentDivisor = 10000;
+      const withdrawFee = smallWithdrawAmount
+        .mul(securityFee)
+        .div(percentDivisor);
+      const expectedBalance = userBalance
+        .add(smallWithdrawAmount)
+        .sub(withdrawFee);
+
+      expect(userBalanceAfterWithdraw).to.be.closeTo(
+        expectedBalance,
+        toEther("0.0000001")
+      );
     });
     xit("should allow small withdrawal", async function () {
       const userBalance = await want.balanceOf(selfAddress);

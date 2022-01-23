@@ -107,6 +107,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         } else if (_shouldDeleverage(_ltv)) {
             console.log("_shouldDeleverage");
             _deleverage(0);
+        } else {
+            console.log("No leveraging");
         }
     }
 
@@ -282,7 +284,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         if(_shouldLeverage(_ltv)) {
             console.log("_shouldLeverage");
-            // CErc20I(cWant).redeemUnderlying(minted);
+            // Strategy is underleveraged so can withdraw underlying directly
+            _withdrawUnderlyingToVault(_amount);
             _leverMax();
             updateBalance();
         } else if (_shouldDeleverage(_ltv)) {
@@ -297,18 +300,26 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             if (_amount > supplied) {
                 _amount = supplied;
             }
-            
-            uint256 redeemCode = CErc20I(cWant).redeemUnderlying(_amount);
-            console.log("redeemCode: ", redeemCode);
+            // Strategy has deleveraged to the point where it can withdraw underlying
+            _withdrawUnderlyingToVault(_amount);
+        } else {
+            // LTV is in the acceptable range so the underlying can be withdrawn directly
+            console.log("do nothing");
+            _withdrawUnderlyingToVault(_amount);
+        }
+    }
+
+    function _withdrawUnderlyingToVault(uint256 _amount) internal {
+            console.log("_withdrawUnderlyingToVault");
             uint256 withdrawFee = _amount * securityFee / PERCENT_DIVISOR;
+            uint256 withdrawAmount = _amount - withdrawFee;
+            uint256 redeemCode = CErc20I(cWant).redeemUnderlying(withdrawAmount);
+            console.log("redeemCode: ", redeemCode);
             uint256 wantBalance = IERC20(want).balanceOf(address(this));
             console.log("wantBalance: ", wantBalance);
             console.log("_amount: ", _amount);
-            IERC20(want).safeTransfer(vault, _amount - withdrawFee);
-        } else {
-            // LTV is in the acceptable range
-            console.log("do nothing");
-        }
+            console.log("withdrawAmount: ", withdrawAmount);
+            IERC20(want).safeTransfer(vault, withdrawAmount);
     }
 
     function _getDesiredBorrow(uint256 _withdrawAmount)
