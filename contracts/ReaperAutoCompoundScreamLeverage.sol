@@ -644,6 +644,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * in addition to allowance to all pool rewards for the {uniRouter}.
      */
     function _removeAllowances() internal {
+        IERC20(want).safeApprove(address(cWant), 0);
+        IERC20(WFTM).safeApprove(UNI_ROUTER, 0);
+        IERC20(SCREAM).safeApprove(UNI_ROUTER, 0);
     }
 
     //emergency function that we can use to deleverage manually if something is broken
