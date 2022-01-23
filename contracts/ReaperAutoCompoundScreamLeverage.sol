@@ -89,8 +89,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     /**
      * @dev Function that puts the funds to work.
-     * It gets called whenever someone deposits in the strategy's vault contract.
-     * It deposits {XTAROT} into xBoo (BooMirrorWorld) to farm {xBoo} and finally,
+     * It gets called whenever someone supplied in the strategy's vault contract.
+     * It supplied {XTAROT} into xBoo (BooMirrorWorld) to farm {xBoo} and finally,
      * xBoo is deposited into other pools to earn additional rewards
      */
     function deposit() public whenNotPaused {
@@ -103,7 +103,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if(_shouldLeverage(_ltv)) {
             console.log("_shouldLeverage");
             _leverMax();
-            updateBalance();
         } else if (_shouldDeleverage(_ltv)) {
             console.log("_shouldDeleverage");
             _deleverage(0);
@@ -132,6 +131,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
                 totalAmountToBorrow = totalAmountToBorrow -
                     _leverUpStep(totalAmountToBorrow);
             }
+        updateBalance();
     }
 
     function _leverUpStep(uint256 _amount) internal returns (uint256) {
@@ -251,24 +251,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         console.log("ltv: ", ltv);
     }
 
-    //returns our current collateralisation ratio. Should be compared with collateralTarget
-    // function storedCollateralisation() public view returns (uint256 collat) {
-    //     (uint256 lend, uint256 borrow) = getCurrentPosition();
-    //     if (lend == 0) {
-    //         return 0;
-    //     }
-    //     collat = uint256(1e18).mul(borrow).div(lend);
-    // }
-
-    // function getLivePosition()
-    //     public
-    //     returns (uint256 deposits, uint256 borrows)
-    // {
-    //     deposits = cToken.balanceOfUnderlying(address(this));
-
-    //     //we can use non state changing now because we updated state with balanceOfUnderlying call
-    //     borrows = cToken.borrowBalanceStored(address(this));
-    // }
 
     /**
      * @dev Withdraws funds and sents them back to the vault.
@@ -328,7 +310,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     {
         console.log("_getDesiredBorrow");
         //we want to use statechanging for safety
-        // (uint256 deposits, uint256 borrows) = getLivePosition();
+        // (uint256 supplied, uint256 borrowed) = getLivePosition();
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
 
@@ -336,7 +318,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 unwoundSupplied = supplied - borrowed;
 
         //we want to see how close to collateral target we are.
-        //So we take our unwound deposits and add or remove the _withdrawAmount we are are adding/removing.
+        //So we take our unwound supplied and add or remove the _withdrawAmount we are are adding/removing.
         //This gives us our desired future undwoundDeposit (desired supply)
 
         uint256 desiredSupply = 0;
@@ -359,13 +341,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         console.log("position: ", position);
     }
 
-    function _deleverage(uint256 _amount) internal returns (bool notAll) {
+    function _deleverage(uint256 _amount) internal {
         console.log("_deleverage");
         uint256 newBorrow = _getDesiredBorrow(_amount);
-        // (uint256 position, bool deficit) = _getDesiredBorrow(
-        //     _amount,
-        //     false
-        // );
 
         // //If there is no deficit we dont need to adjust position
         // //if the position change is tiny do nothing
@@ -373,53 +351,21 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             uint256 i = 0;
             while (newBorrow > minWantToLeverage + 100) {
                 console.log("while newBorrow: ", newBorrow);
-                newBorrow = newBorrow - _normalDeleverage(newBorrow);
+                newBorrow = newBorrow - _leverDownStep(newBorrow);
                 i++;
                 //A limit set so we don't run out of gas
                 if (i >= borrowDepth) {
-                    notAll = true;
                     break;
                 }
             }
         }
-        // //now withdraw
-        // //if we want too much we just take max
-
-        // //This part makes sure our withdrawal does not force us into liquidation
-        // (uint256 depositBalance, uint256 borrowBalance) = getCurrentPosition();
-
-        // uint256 tempColla = collateralTarget;
-
-        // uint256 reservedAmount = 0;
-        // if (tempColla == 0) {
-        //     tempColla = 1e15; // 0.001 * 1e18. lower we have issues
-        // }
-
-        // reservedAmount = borrowBalance.mul(1e18).div(tempColla);
-        // if (depositBalance >= reservedAmount) {
-        //     uint256 redeemable = depositBalance.sub(reservedAmount);
-        //     uint256 balan = cToken.balanceOf(address(this));
-        //     if (balan > 1) {
-        //         if (redeemable < _amount) {
-        //             cToken.redeemUnderlying(redeemable);
-        //         } else {
-        //             cToken.redeemUnderlying(_amount);
-        //         }
-        //     }
-        // }
-
-        // if (
-        //     collateralTarget == 0 &&
-        //     balanceOfToken(address(want)) > borrowBalance
-        // ) {
-        //     cToken.repayBorrow(borrowBalance);
-        // }
+        updateBalance();
     }
 
-    function _normalDeleverage(
+    function _leverDownStep(
         uint256 maxDeleverage
     ) internal returns (uint256 deleveragedAmount) {
-        console.log("_normalDeleverage");
+        console.log("_leverDownStep");
         uint256 minAllowedSupply = 0;
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
@@ -581,24 +527,56 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         return IERC20(want).balanceOf(address(this));
     }
 
-    //Returns the current position
-    //WARNING - this returns just the _withdrawAmount at last time someone touched the cToken token. Does not accrue interst in between
-    //cToken is very active so not normally an issue.
-    // function balanceOfPool()
-    //     public
-    //     view
-    //     returns (uint256)
-    // {
-    //     (
-    //         ,
-    //         uint256 ctokenBalance,
-    //         uint256 borrowBalance,
-    //         uint256 exchangeRate
-    //     ) = cWant.getAccountSnapshot(address(this));
+    //Calculate how many blocks until we are in liquidation based on current interest rates
+    //WARNING does not include compounding so the estimate becomes more innacurate the further ahead we look
+    //equation. Compound doesn't include compounding for most blocks
+    //((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
+    function getblocksUntilLiquidation() public view returns (uint256) {
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
+            address(cWant)
+        );
 
-    //     uint256 deposits = ctokenBalance * exchangeRate / 1e18;
-    //     return deposits - borrowBalance;
-    // }
+        (uint256 supplied, uint256 borrowed) = getCurrentPosition();
+
+        uint256 borrrowRate = cWant.borrowRatePerBlock();
+
+        uint256 supplyRate = cWant.supplyRatePerBlock();
+
+        uint256 collateralisedDeposit = supplied
+            * collateralFactorMantissa
+            / MANTISSA;
+
+        uint256 borrowCost = borrowed * borrrowRate;
+        uint256 supplyGain = collateralisedDeposit * supplyRate;
+
+        if (supplyGain >= borrowCost) {
+            return type(uint256).max;
+        } else {
+            uint256 netSupplied = collateralisedDeposit - borrowed;
+            uint256 totalCost = borrowCost - supplyGain;
+            //minus 1 for this block
+            return netSupplied * MANTISSA / totalCost;
+        }
+    }
+
+    //Returns the current position
+    //WARNING - this returns just the balance at last time someone touched the cToken token. Does not accrue interst in between
+    //cToken is very active so not normally an issue.
+    function getCurrentPosition()
+        public
+        view
+        returns (uint256 supplied, uint256 borrowed)
+    {
+        (
+            ,
+            uint256 cWantBalance,
+            uint256 borrowBalance,
+            uint256 exchangeRate
+        ) = cWant.getAccountSnapshot(address(this));
+        borrowed = borrowBalance;
+
+        supplied = cWantBalance * exchangeRate / MANTISSA;
+    }
 
     function updateBalance() public {
         console.log("updateBalance()");
@@ -617,7 +595,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
-     * @dev Pauses deposits. Withdraws all funds from the AceLab contract, leaving rewards behind.
+     * @dev Pauses supplied. Withdraws all funds from the AceLab contract, leaving rewards behind.
      */
     function panic() public {
         _onlyStrategistOrOwner();
