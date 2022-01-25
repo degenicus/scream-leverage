@@ -5,7 +5,6 @@ import "./interfaces/IUniswapRouter.sol";
 import "./interfaces/IPaymentRouter.sol";
 import "./interfaces/CErc20I.sol";
 import "./interfaces/IComptroller.sol";
-// import "./interfaces/ISToken.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 import "hardhat/console.sol";
@@ -13,7 +12,7 @@ import "hardhat/console.sol";
 pragma solidity 0.8.9;
 
 /**
- * @dev This strategy will deposit and leverage a Scream token to maximize yield by farming Scream tokens
+ * @dev This strategy will deposit and leverage a token on Scream to maximize yield by farming Scream tokens
  */
 contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     using SafeERC20 for IERC20;
@@ -51,14 +50,18 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Scream variables
      * {markets} - Contains the Scream tokens to farm, used to enter markets and claim Scream
+     * {MANTISSA} - The unit used by the Compound protocol
      */
     address[] public markets;
     uint256 public constant MANTISSA = 1e18;
 
     /**
-     * @dev Scream variables
+     * @dev Strategy variables
      * {targetLTV} - The target loan to value for the strategy where 1 ether = 100%
      * {allowedLTVDrift} - How much the strategy can deviate from the target ltv where 0.01 ether = 1%
+     * {balanceOfPool} - The total balance deposited into Scream (supplied - borrowed)
+     * {borrowDepth} - The maximum amount of loops used to leverage and deleverage
+     * {minWantToLeverage} - The minimum amount of want to leverage in a loop
      */
     uint256 public targetLTV = 0.73 ether;
     uint256 public allowedLTVDrift = 0.01 ether;
@@ -89,36 +92,41 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     /**
      * @dev Withdraws funds and sents them back to the vault.
-     * It withdraws {XTAROT} from the XStakingPoolController pools.
-     * The available {XTAROT} minus fees is returned to the vault.
+     * It withdraws {want} from Scream
+     * The available {want} minus fees is returned to the vault.
      */
-    function withdraw(uint256 _amount) external {
+    function withdraw(uint256 _withdrawAmount) external {
         require(msg.sender == vault, "!vault");
         console.log("withdraw");
 
-        uint256 _ltv = _calculateLTVAfterWithdraw(_amount);
+        uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
         console.log("_ltv: ", _ltv);
 
         if(_shouldLeverage(_ltv)) {
             console.log("_shouldLeverage");
             // Strategy is underleveraged so can withdraw underlying directly
-            _withdrawUnderlyingToVault(_amount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount, true);
             _leverMax();
         } else if (_shouldDeleverage(_ltv)) {
             console.log("_shouldDeleverage");
-            _deleverage(_amount);
+            _deleverage(_withdrawAmount);
             console.log("deleveraged");
             
             // Strategy has deleveraged to the point where it can withdraw underlying
-            _withdrawUnderlyingToVault(_amount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount, true);
         } else {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
             console.log("do nothing");
-            _withdrawUnderlyingToVault(_amount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount, true);
         }
         updateBalance();
     }
 
+    /**
+     * @dev Calculates the LTV using existing exchange rate,
+     * depends on the cWant being updated to be accurate.
+     * Does not update in order provide a view function for LTV.
+     */
     function calculateLTV()
         external
         view
@@ -140,7 +148,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
          ltv = MANTISSA * borrowed / supplied;
     }
 
-        /**
+    /**
      * @dev Returns the approx amount of profit from harvesting.
      *      Profit is denominated in WFTM, and takes fees into account.
      */
@@ -160,19 +168,27 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         profit -= wftmFee;
     }
 
-    //emergency function that we can use to deleverage manually if something is broken
+    /**
+     * @dev Emergency function to deleverage in case regular deleveraging breaks
+     */
     function manualDeleverage(uint256 amount) external {
         _onlyStrategistOrOwner();
         require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error");
         require(cWant.repayBorrow(amount) == 0, "Scream returned an error");
     }
 
-    //emergency function that we can use to deleverage manually if something is broken
+    /**
+     * @dev Emergency function to deleverage in case regular deleveraging breaks
+     */
     function manualReleaseWant(uint256 amount) external {
         _onlyStrategistOrOwner();
-        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error"); // dev: !manual-release-want
+        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error");
     }
 
+    /**
+     * @dev Sets a new LTV for leveraging.
+     * Should be in units of 1e18
+     */
     function setTargetLtv(uint256 _ltv)
         external
         
@@ -181,7 +197,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(
             address(cWant)
         );
-        require(collateralFactorMantissa > _ltv, "Ltv above max level");
+        require(collateralFactorMantissa > _ltv + allowedLTVDrift, "Ltv above max level");
         targetLTV = _ltv;
     }
 
@@ -239,8 +255,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Function that puts the funds to work.
      * It gets called whenever someone supplied in the strategy's vault contract.
-     * It supplied {XTAROT} into xBoo (BooMirrorWorld) to farm {xBoo} and finally,
-     * xBoo is deposited into other pools to earn additional rewards
+     * It supplies {want} Scream to farm {SCREAM}
      */
     function deposit() public whenNotPaused {
         console.log("-------------------------------------------------");
@@ -262,14 +277,19 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     
-    // calculate the total underlying {want} held by the strat.
+    /**
+     * @dev Calculates the total amount of {want} held by the strategy
+     * which is the balance of want + the total amount supplied to Scream.
+     */
     function balanceOf() public override view returns (uint256) {
         console.log("balanceOfWant(): ", balanceOfWant());
         console.log("balanceOfPool(): ", balanceOfPool);
         return balanceOfWant() + balanceOfPool;
     }
 
-    // it calculates how much {want} this contract holds.
+    /**
+     * @dev Calculates the balance of want held directly by the strategy
+     */
     function balanceOfWant() public view returns (uint256) {
         console.log("balanceOfWant()");
         uint256 _balanceOfWant = IERC20(want).balanceOf(address(this));
@@ -277,10 +297,12 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         return IERC20(want).balanceOf(address(this));
     }
 
-    //Calculate how many blocks until we are in liquidation based on current interest rates
-    //WARNING does not include compounding so the estimate becomes more innacurate the further ahead we look
-    //equation. Compound doesn't include compounding for most blocks
-    //((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
+    /**
+     * @dev Calculates how many blocks until we are in liquidation based on current interest rates
+     * WARNING does not include compounding so the estimate becomes more innacurate the further ahead we look
+     * Compound doesn't include compounding for most blocks
+     * Equation: ((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
+     */
     function getblocksUntilLiquidation() public view returns (uint256) {
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(
             address(cWant)
@@ -309,9 +331,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
     }
 
-    //Returns the current position
-    //WARNING - this returns just the balance at last time someone touched the cToken token. Does not accrue interst in between
-    //cToken is very active so not normally an issue.
+    /**
+     * @dev Returns the current position in Scream. Does not accrue interest
+     * so might not be accurate, but the cWant is usually updated.
+     */
     function getCurrentPosition()
         public
         view
@@ -328,15 +351,22 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         supplied = cWantBalance * exchangeRate / MANTISSA;
     }
 
+    /**
+     * @dev Updates the balance. This is the state changing version so it sets
+     * balanceOfPool to the latest value.
+     */
     function updateBalance() public {
         console.log("updateBalance()");
-        uint256 supplyBal = CErc20I(cWant).balanceOfUnderlying(address(this));
-        uint256 borrowBal = CErc20I(cWant).borrowBalanceCurrent(address(this));
-        console.log("supplyBal: ", supplyBal);
-        console.log("borrowBal: ", borrowBal);
-        balanceOfPool = supplyBal - borrowBal;
+        uint256 supplyBalance = CErc20I(cWant).balanceOfUnderlying(address(this));
+        uint256 borrowBalance = CErc20I(cWant).borrowBalanceCurrent(address(this));
+        console.log("supplyBal: ", supplyBalance);
+        console.log("borrowBal: ", borrowBalance);
+        balanceOfPool = supplyBalance - borrowBalance;
     }
 
+    /**
+     * @dev Levers the strategy up to the targetLTV
+     */
     function _leverMax() internal {
         console.log("_leverMax()");
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
@@ -359,12 +389,15 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             }
     }
 
-    function _leverUpStep(uint256 _amount) internal returns (uint256) {
-        if (_amount == 0) {
+    /**
+     * @dev Does one step of leveraging
+     */
+    function _leverUpStep(uint256 _withdrawAmount) internal returns (uint256) {
+        if (_withdrawAmount == 0) {
             return 0;
         }
 
-        console.log("_leverUpStep: ", _amount);
+        console.log("_leverUpStep: ", _withdrawAmount);
 
         uint256 wantBalance = balanceOfWant();
 
@@ -382,14 +415,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         canBorrow = canBorrow - borrowed;
 
-        if (canBorrow < _amount) {
-            _amount = canBorrow;
+        if (canBorrow < _withdrawAmount) {
+            _withdrawAmount = canBorrow;
         }
 
-        if (_amount > 10) {
+        if (_withdrawAmount > 10) {
             // borrow available amount
-            uint256 code1 = CErc20I(cWant).borrow(_amount);
-            console.log("borrow: ", _amount);
+            uint256 code1 = CErc20I(cWant).borrow(_withdrawAmount);
+            console.log("borrow: ", _withdrawAmount);
             console.log("code1: ", code1);
 
             console.log("mint: ", balanceOfWant());
@@ -398,9 +431,12 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             console.log("code2: ", code2);
         }
 
-        return _amount;
+        return _withdrawAmount;
     }
 
+    /**
+     * @dev Gets the maximum amount allowed to be borrowed for a given collateral factor and amount supplied
+     */
     function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal view returns(uint256) {
         
         console.log("collateralFactor: ", collateralFactor);
@@ -412,6 +448,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             );
     }
 
+    /**
+     * @dev Returns if the strategy should leverage with the given ltv level
+     */
     function _shouldLeverage(uint256 _ltv) internal view returns (bool) {
         if (_ltv < targetLTV - allowedLTVDrift) {
             return true;
@@ -419,6 +458,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         return false;
     }
 
+    /**
+     * @dev Returns if the strategy should deleverage with the given ltv level
+     */
     function _shouldDeleverage(uint256 _ltv) internal view returns (bool) {
         if (_ltv > targetLTV + allowedLTVDrift) {
             return true;
@@ -426,6 +468,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         return false;
     }
 
+    /**
+     * @dev This is the state changing calculation of LTV that is more accurate
+     * to be used internally.
+     */
     function _calculateLTV() internal returns(uint256 ltv) {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
@@ -439,6 +485,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         console.log("ltv: ", ltv);
     }
 
+    /**
+     * @dev Calculates what the LTV will be after withdrawing
+     */
     function _calculateLTVAfterWithdraw(uint256 _withdrawAmount) internal returns(uint256 ltv) {
         console.log("_calculateLTVAfterWithdraw: ");
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
@@ -455,16 +504,19 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         console.log("ltv: ", ltv);
     }
 
-    function _withdrawUnderlyingToVault(uint256 _amount, bool _useWithdrawFee) internal {
+    /**
+     * @dev Withdraws want to the vault by redeeming the underlying
+     */
+    function _withdrawUnderlyingToVault(uint256 _withdrawAmount, bool _useWithdrawFee) internal {
             console.log("_withdrawUnderlyingToVault");
-            console.log("_amount: ", _amount);
+            console.log("_withdrawAmount: ", _withdrawAmount);
             console.log("_useWithdrawFee: ", _useWithdrawFee);
             uint256 supplied = cWant.balanceOfUnderlying(address(this));
             uint256 borrowed = cWant.borrowBalanceStored(address(this));
             uint256 realSupplied = supplied - borrowed;
             
-            if (_amount > realSupplied) {
-                _amount = realSupplied;
+            if (_withdrawAmount > realSupplied) {
+                _withdrawAmount = realSupplied;
             }
 
             console.log("supplied: ", supplied);
@@ -475,21 +527,25 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             uint256 withdrawAmount;
 
             if(_useWithdrawFee) {
-                uint256 withdrawFee = _amount * securityFee / PERCENT_DIVISOR;
-                withdrawAmount = _amount - withdrawFee;
+                uint256 withdrawFee = _withdrawAmount * securityFee / PERCENT_DIVISOR;
+                withdrawAmount = _withdrawAmount - withdrawFee;
             } else {
-                withdrawAmount = _amount;
+                withdrawAmount = _withdrawAmount;
             }
             
             uint256 redeemCode = CErc20I(cWant).redeemUnderlying(withdrawAmount);
             console.log("redeemCode: ", redeemCode);
             uint256 wantBalance = IERC20(want).balanceOf(address(this));
             console.log("wantBalance: ", wantBalance);
-            console.log("_amount: ", _amount);
+            console.log("_withdrawAmount: ", _withdrawAmount);
             console.log("withdrawAmount: ", withdrawAmount);
             IERC20(want).safeTransfer(vault, withdrawAmount);
     }
 
+    /**
+     * @dev For a given withdraw amount, figures out the new borrow with the current supply
+     * that will maintain the target LTV
+     */
     function _getDesiredBorrow(uint256 _withdrawAmount)
         internal
         returns (uint256 position)
@@ -526,9 +582,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         console.log("position: ", position);
     }
 
-    function _deleverage(uint256 _amount) internal {
+    /**
+     * @dev For a given withdraw amount, deleverages to a borrow level
+     * that will maintain the target LTV
+     */
+    function _deleverage(uint256 _withdrawAmount) internal {
         console.log("_deleverage");
-        uint256 newBorrow = _getDesiredBorrow(_amount);
+        uint256 newBorrow = _getDesiredBorrow(_withdrawAmount);
 
         // //If there is no deficit we dont need to adjust position
         // //if the position change is tiny do nothing
@@ -546,6 +606,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
     }
 
+    /**
+     * @dev Deleverages one step
+     */
     function _leverDownStep(
         uint256 maxDeleverage
     ) internal returns (uint256 deleveragedAmount) {
@@ -590,10 +653,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Core function of the strat, in charge of collecting and re-investing rewards.
      * @notice Assumes the deposit will take care of the TVL rebalancing.
-     * 1. Claims {REWARD_TOKEN} from the comptroller.
-     * 2. Swaps {REWARD_TOKEN} to {WFTM}.
+     * 1. Claims {SCREAM} from the comptroller.
+     * 2. Swaps {SCREAM} to {WFTM}.
      * 3. Claims fees for the harvest caller and treasury.
-     * 4. Swaps the {WFTM} token for {WANT}
+     * 4. Swaps the {WFTM} token for {want}
      * 5. Deposits. 
      */
     function _harvestCore() internal override {
@@ -619,15 +682,16 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     /**
      * @dev Core harvest function.
+     * Swaps {SCREAM} to {WFTM}
      */
     function _swapRewardsToWftm() internal {
         console.log("_swapRewardsToWftm");
-        uint256 screamBal = IERC20(SCREAM).balanceOf(address(this));
-        console.log("screamBal: ", screamBal);
-        if (screamBal != 0) {
+        uint256 screamBalance = IERC20(SCREAM).balanceOf(address(this));
+        console.log("screamBalance: ", screamBalance);
+        if (screamBalance != 0) {
             IUniswapRouter(UNI_ROUTER)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                screamBal,
+                screamBalance,
                 0,
                 screamToWftmRoute,
                 address(this),
@@ -636,6 +700,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
     }
 
+    /**
+     * @dev Core harvest function.
+     * Charges fees based on the amount of WFTM gained from reward
+     */
     function _chargeFees() internal {
         console.log("_chargeFees()");
         uint256 wftmFee = IERC20(WFTM).balanceOf(address(this)) * totalFee / PERCENT_DIVISOR;
@@ -661,13 +729,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
     }
 
+    /**
+     * @dev Core harvest function.
+     * Swaps {WFTM} for {want}
+     */
     function _swapToWant() internal {
         console.log("_swapToWant()");
-        uint256 wftmBal = IERC20(WFTM).balanceOf(address(this));
-        if (wftmBal != 0) {
+        uint256 wftmBalance = IERC20(WFTM).balanceOf(address(this));
+        if (wftmBalance != 0) {
             IUniswapRouter(UNI_ROUTER)
                 .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                    wftmBal,
+                    wftmBalance,
                     0,
                     wftmToWantRoute,
                     address(this),
