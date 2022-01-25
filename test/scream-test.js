@@ -219,7 +219,7 @@ describe("Vaults", function () {
       console.log(`ltvAfter: ${ltvAfter}`);
       expect(ltvAfter).to.be.closeTo(ltv, allowedLTVDrift);
     });
-    xit("should mint user their pool share", async function () {
+    it("should mint user their pool share", async function () {
       console.log("---------------------------------------------");
       const userBalance = await want.balanceOf(selfAddress);
       console.log(userBalance.toString());
@@ -229,10 +229,8 @@ describe("Vaults", function () {
 
       const whaleDepositAmount = ethers.utils.parseEther("100");
       await vault.connect(wantWhale).deposit(whaleDepositAmount);
-      console.log((await vault.balance()).toString());
-      // console.log((await boo.balanceOf(selfAddress)).toString());
-      // const selfBooBalance = await vault.balanceOf(selfAddress);
-      // console.log(selfBooBalance.toString());
+      const selfWantBalance = await vault.balanceOf(selfAddress);
+      console.log(selfWantBalance.toString());
       const ownerDepositAmount = ethers.utils.parseEther("5");
       await want.connect(self).transfer(ownerAddress, ownerDepositAmount);
       const ownerBalance = await want.balanceOf(ownerAddress);
@@ -240,19 +238,25 @@ describe("Vaults", function () {
       console.log(ownerBalance.toString());
       await vault.deposit(ownerDepositAmount);
       console.log((await vault.balance()).toString());
-      const ownerVaultBooBalance = await vault.balanceOf(ownerAddress);
-      console.log(ownerVaultBooBalance.toString());
-      await vault.withdraw(ownerVaultBooBalance);
-      const ownerBooBalance = await want.balanceOf(ownerAddress);
-      console.log(`ownerBooBalance: ${ownerBooBalance}`);
-      const ownerVaultBooBalanceAfterWithdraw = await vault.balanceOf(
+      const ownerVaultWantBalance = await vault.balanceOf(ownerAddress);
+      console.log(
+        `ownerVaultWantBalance.toString(): ${ownerVaultWantBalance.toString()}`
+      );
+      await vault.withdrawAll();
+      const ownerWantBalance = await want.balanceOf(ownerAddress);
+      console.log(`ownerWantBalance: ${ownerWantBalance}`);
+      const ownerVaultWantBalanceAfterWithdraw = await vault.balanceOf(
         ownerAddress
       );
       console.log(
-        `ownerVaultBooBalanceAfterWithdraw: ${ownerVaultBooBalanceAfterWithdraw}`
+        `ownerVaultWantBalanceAfterWithdraw: ${ownerVaultWantBalanceAfterWithdraw}`
       );
-      // expect(ownerBooBalance).to.equal(ownerDepositAmount);
-      // expect(selfBooBalance).to.equal(selfDepositAmount);
+      const allowedImprecision = toEther("0.01");
+      expect(ownerWantBalance).to.be.closeTo(
+        ownerDepositAmount,
+        allowedImprecision
+      );
+      expect(selfWantBalance).to.equal(selfDepositAmount);
     });
     xit("should allow withdrawals", async function () {
       const userBalance = await want.balanceOf(selfAddress);
@@ -426,12 +430,16 @@ describe("Vaults", function () {
       );
       await vault.connect(self).deposit(depositAmount);
       console.log(
-        `await boo.balanceOf(selfAddress): ${await want.balanceOf(selfAddress)}`
+        `await want.balanceOf(selfAddress): ${await want.balanceOf(
+          selfAddress
+        )}`
       );
 
       await vault.connect(self).withdraw(depositAmount);
       console.log(
-        `await boo.balanceOf(selfAddress): ${await want.balanceOf(selfAddress)}`
+        `await want.balanceOf(selfAddress): ${await want.balanceOf(
+          selfAddress
+        )}`
       );
       const newUserVaultBalance = await vault.balanceOf(selfAddress);
       console.log(`newUserVaultBalance: ${newUserVaultBalance}`);
@@ -487,7 +495,7 @@ describe("Vaults", function () {
       await expect(vault.connect(self).deposit(depositAmount)).to.not.be
         .reverted;
     });
-    it("should be able to panic", async function () {
+    xit("should be able to panic", async function () {
       const depositAmount = ethers.utils.parseEther(".05");
       await vault.connect(self).deposit(depositAmount);
       const vaultBalance = await vault.balance();
@@ -510,8 +518,9 @@ describe("Vaults", function () {
       await expect(strategy.retireStrat()).to.not.be.reverted;
       const newVaultBalance = await vault.balance();
       const newStrategyBalance = await strategy.balanceOf();
-      expect(newVaultBalance).to.gt(vaultBalance);
-      expect(newStrategyBalance).to.equal(0);
+      const allowedImprecision = toEther("0.00000001");
+      expect(newVaultBalance).to.be.closeTo(vaultBalance, allowedImprecision);
+      expect(newStrategyBalance).to.be.lt(allowedImprecision);
     });
     xit("should be able to retire strategy with no balance", async function () {
       // Test needs the require statement to be commented out during the test

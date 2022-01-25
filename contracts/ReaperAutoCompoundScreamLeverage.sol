@@ -109,6 +109,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         } else {
             console.log("No leveraging");
         }
+        updateBalance();
     }
 
     function _leverMax() internal {
@@ -131,7 +132,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
                 totalAmountToBorrow = totalAmountToBorrow -
                     _leverUpStep(totalAmountToBorrow);
             }
-        updateBalance();
     }
 
     function _leverUpStep(uint256 _amount) internal returns (uint256) {
@@ -281,10 +281,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             console.log("do nothing");
             _withdrawUnderlyingToVault(_amount, true);
         }
+        updateBalance();
     }
 
     function _withdrawUnderlyingToVault(uint256 _amount, bool _useWithdrawFee) internal {
             console.log("_withdrawUnderlyingToVault");
+            console.log("_amount: ", _amount);
+            console.log("_useWithdrawFee: ", _useWithdrawFee);
             uint256 supplied = cWant.balanceOfUnderlying(address(this));
             uint256 borrowed = cWant.borrowBalanceStored(address(this));
             uint256 realSupplied = supplied - borrowed;
@@ -308,7 +311,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             }
             
             uint256 redeemCode = CErc20I(cWant).redeemUnderlying(withdrawAmount);
-            updateBalance();
             console.log("redeemCode: ", redeemCode);
             uint256 wantBalance = IERC20(want).balanceOf(address(this));
             console.log("wantBalance: ", wantBalance);
@@ -371,7 +373,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
                 }
             }
         }
-        updateBalance();
     }
 
     function _leverDownStep(
@@ -604,6 +605,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * vault, ready to be migrated to the new strat.
      */
     function retireStrat() external {
+        require(msg.sender == vault, "!vault");
+        _claimRewards();
+        _swapRewardsToWftm();
+        _swapToWant();
+
+        uint256 maxAmount = type(uint256).max;
+        _deleverage(maxAmount);
+        _withdrawUnderlyingToVault(maxAmount, false);
     }
 
     /**
