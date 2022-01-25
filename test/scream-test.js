@@ -487,7 +487,7 @@ describe("Vaults", function () {
       await expect(vault.connect(self).deposit(depositAmount)).to.not.be
         .reverted;
     });
-    xit("should be able to panic", async function () {
+    it("should be able to panic", async function () {
       const depositAmount = ethers.utils.parseEther(".05");
       await vault.connect(self).deposit(depositAmount);
       const vaultBalance = await vault.balance();
@@ -496,8 +496,9 @@ describe("Vaults", function () {
       expect(vaultBalance).to.equal(strategyBalance);
       const newVaultBalance = await vault.balance();
       const newStrategyBalance = await strategy.balanceOf();
-      expect(newVaultBalance).to.equal(vaultBalance);
-      expect(newStrategyBalance).to.equal(0);
+      const allowedImprecision = toEther("0.000000001");
+      expect(newVaultBalance).to.be.closeTo(vaultBalance, allowedImprecision);
+      expect(newStrategyBalance).to.be.lt(allowedImprecision);
     });
     xit("should be able to retire strategy", async function () {
       const depositAmount = ethers.utils.parseEther(".05");
@@ -531,7 +532,7 @@ describe("Vaults", function () {
       expect(hasProfit).to.equal(true);
       expect(hasCallFee).to.equal(true);
     });
-    it("should be able to estimate blocks until liquidation", async function () {
+    xit("should be able to estimate blocks until liquidation", async function () {
       const whaleDepositAmount = ethers.utils.parseEther("327171");
       await vault.connect(wantWhale).deposit(whaleDepositAmount);
       const blocksUntilLiquidation = await strategy.getblocksUntilLiquidation();

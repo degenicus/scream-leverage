@@ -63,7 +63,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public targetLTV = 0.73 ether;
     uint256 public allowedLTVDrift = 0.01 ether;
     uint256 public balanceOfPool = 0;
-    uint256 public borrowDepth = 8;
+    uint256 public borrowDepth = 10;
     uint256 public minWantToLeverage = 1000;
 
     /**
@@ -267,35 +267,48 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if(_shouldLeverage(_ltv)) {
             console.log("_shouldLeverage");
             // Strategy is underleveraged so can withdraw underlying directly
-            _withdrawUnderlyingToVault(_amount);
+            _withdrawUnderlyingToVault(_amount, true);
             _leverMax();
-            updateBalance();
         } else if (_shouldDeleverage(_ltv)) {
             console.log("_shouldDeleverage");
             _deleverage(_amount);
             console.log("deleveraged");
-            uint256 supplied = cWant.balanceOfUnderlying(address(this));
-            uint256 borrowed = cWant.borrowBalanceStored(address(this));
-            console.log("supplied: ", supplied);
-            console.log("borrowed: ", borrowed);
-
-            if (_amount > supplied) {
-                _amount = supplied;
-            }
+            
             // Strategy has deleveraged to the point where it can withdraw underlying
-            _withdrawUnderlyingToVault(_amount);
+            _withdrawUnderlyingToVault(_amount, true);
         } else {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
             console.log("do nothing");
-            _withdrawUnderlyingToVault(_amount);
+            _withdrawUnderlyingToVault(_amount, true);
         }
     }
 
-    function _withdrawUnderlyingToVault(uint256 _amount) internal {
+    function _withdrawUnderlyingToVault(uint256 _amount, bool _useWithdrawFee) internal {
             console.log("_withdrawUnderlyingToVault");
-            uint256 withdrawFee = _amount * securityFee / PERCENT_DIVISOR;
-            uint256 withdrawAmount = _amount - withdrawFee;
+            uint256 supplied = cWant.balanceOfUnderlying(address(this));
+            uint256 borrowed = cWant.borrowBalanceStored(address(this));
+            uint256 realSupplied = supplied - borrowed;
+            
+            if (_amount > realSupplied) {
+                _amount = realSupplied;
+            }
+
+            console.log("supplied: ", supplied);
+            console.log("borrowed: ", borrowed);
+            console.log("realSupplied: ", realSupplied);
+
+
+            uint256 withdrawAmount;
+
+            if(_useWithdrawFee) {
+                uint256 withdrawFee = _amount * securityFee / PERCENT_DIVISOR;
+                withdrawAmount = _amount - withdrawFee;
+            } else {
+                withdrawAmount = _amount;
+            }
+            
             uint256 redeemCode = CErc20I(cWant).redeemUnderlying(withdrawAmount);
+            updateBalance();
             console.log("redeemCode: ", redeemCode);
             uint256 wantBalance = IERC20(want).balanceOf(address(this));
             console.log("wantBalance: ", wantBalance);
@@ -597,7 +610,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Pauses supplied. Withdraws all funds from the AceLab contract, leaving rewards behind.
      */
     function panic() public {
+        console.log("--------------------------------------");
+        console.log("panic()");
         _onlyStrategistOrOwner();
+    
+        uint256 maxAmount = type(uint256).max;
+        _deleverage(maxAmount);
+        _withdrawUnderlyingToVault(maxAmount, false);
+
         pause();
     }
 
