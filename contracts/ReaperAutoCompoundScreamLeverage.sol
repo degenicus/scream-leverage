@@ -64,8 +64,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public targetLTV = 0.73 ether;
     uint256 public allowedLTVDrift = 0.01 ether;
     uint256 public balanceOfPool = 0;
-    uint256 public borrowDepth = 10;
+    uint256 public borrowDepth = 8;
     uint256 public minWantToLeverage = 1000;
+    uint256 public constant MAX_BORROW_DEPTH = 10;
 
     /**
      * @dev Initializes the strategy. Sets parameters, saves routes, and gives allowances.
@@ -207,6 +208,18 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         );
         require(collateralFactorMantissa > targetLTV + _drift, "Ltv above max level");
         allowedLTVDrift = _drift;
+    }
+
+    /**
+     * @dev Sets a new borrow depth (how many loops for leveraging+deleveraging)
+     */
+    function setBorrowDepth(uint8 _borrowDepth)
+        external
+        
+    {
+        _onlyStrategistOrOwner();
+        require(_borrowDepth <= MAX_BORROW_DEPTH, "Above max borrow depth");
+        borrowDepth = _borrowDepth;
     }
 
     /**
