@@ -194,6 +194,22 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
+     * @dev Sets a new allowed LTV drift
+     * Should be in units of 1e18
+     */
+    function setAllowedLtvDrift(uint256 _drift)
+        external
+        
+    {
+        _onlyStrategistOrOwner();
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
+            address(cWant)
+        );
+        require(collateralFactorMantissa > targetLTV + _drift, "Ltv above max level");
+        allowedLTVDrift = _drift;
+    }
+
+    /**
      * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
      * vault, ready to be migrated to the new strat.
      */
