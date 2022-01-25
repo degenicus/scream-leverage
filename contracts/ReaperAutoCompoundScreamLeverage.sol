@@ -302,7 +302,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Calculates the balance of want held directly by the strategy
      */
     function balanceOfWant() public view returns (uint256) {
-        uint256 _balanceOfWant = IERC20(want).balanceOf(address(this));
         return IERC20(want).balanceOf(address(this));
     }
 
@@ -399,9 +398,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             return 0;
         }
 
-        uint256 wantBalance = balanceOfWant();
-
-        // calculate how much borrow can I take
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(
@@ -409,7 +405,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         );
         uint256 canBorrow = supplied * collateralFactorMantissa / MANTISSA;
 
-        canBorrow = canBorrow - borrowed;
+        canBorrow -= borrowed;
 
         if (canBorrow < _withdrawAmount) {
             _withdrawAmount = canBorrow;
@@ -429,7 +425,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Gets the maximum amount allowed to be borrowed for a given collateral factor and amount supplied
      */
-    function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal view returns(uint256) {
+    function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal pure returns(uint256) {
         
         return
             ((wantSupplied * collateralFactor) /
@@ -537,7 +533,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         //(ds *c)/(1-c)
         uint256 num = desiredSupply * targetLTV;
-        uint256 den = uint256(1e18) - targetLTV;
+        uint256 den = MANTISSA - targetLTV;
 
         uint256 desiredBorrow = num / den;
         if (desiredBorrow > 1e5) {
@@ -703,10 +699,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
-     * @dev Gives max allowance of {XTAROT} for the {xBoo} contract,
-     * {xBoo} allowance for the {POOL_CONTROLLER} contract,
-     * {WFTM} allowance for the {UNI_ROUTER}
-     * in addition to allowance to all pool rewards for the {UNI_ROUTER}.
+     * @dev Gives the necessary allowances to mint cWant, swap rewards etc
      */
     function _giveAllowances() internal {
         IERC20(want).safeApprove(address(cWant), 0);
@@ -718,10 +711,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
-     * @dev Removes all allowance of {stakingToken} for the {xToken} contract,
-     * {xToken} allowance for the {aceLab} contract,
-     * {wftm} allowance for the {uniRouter}
-     * in addition to allowance to all pool rewards for the {uniRouter}.
+     * @dev Removes all allowance that were given
      */
     function _removeAllowances() internal {
         IERC20(want).safeApprove(address(cWant), 0);
