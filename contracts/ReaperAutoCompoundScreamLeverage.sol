@@ -88,6 +88,155 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
+     * @dev Withdraws funds and sents them back to the vault.
+     * It withdraws {XTAROT} from the XStakingPoolController pools.
+     * The available {XTAROT} minus fees is returned to the vault.
+     */
+    function withdraw(uint256 _amount) external {
+        require(msg.sender == vault, "!vault");
+        console.log("withdraw");
+
+        uint256 _ltv = _calculateLTVAfterWithdraw(_amount);
+        console.log("_ltv: ", _ltv);
+
+        if(_shouldLeverage(_ltv)) {
+            console.log("_shouldLeverage");
+            // Strategy is underleveraged so can withdraw underlying directly
+            _withdrawUnderlyingToVault(_amount, true);
+            _leverMax();
+        } else if (_shouldDeleverage(_ltv)) {
+            console.log("_shouldDeleverage");
+            _deleverage(_amount);
+            console.log("deleveraged");
+            
+            // Strategy has deleveraged to the point where it can withdraw underlying
+            _withdrawUnderlyingToVault(_amount, true);
+        } else {
+            // LTV is in the acceptable range so the underlying can be withdrawn directly
+            console.log("do nothing");
+            _withdrawUnderlyingToVault(_amount, true);
+        }
+        updateBalance();
+    }
+
+    function calculateLTV()
+        external
+        view
+        returns (uint256 ltv)
+    {
+        (
+            ,
+            uint256 cWantBalance,
+            uint256 borrowed,
+            uint256 exchangeRate
+        ) = cWant.getAccountSnapshot(address(this));
+
+        uint256 supplied = cWantBalance * exchangeRate / MANTISSA;
+
+        if (supplied == 0 || borrowed == 0) {
+            return 0;
+        }
+
+         ltv = MANTISSA * borrowed / supplied;
+    }
+
+        /**
+     * @dev Returns the approx amount of profit from harvesting.
+     *      Profit is denominated in WFTM, and takes fees into account.
+     */
+    function estimateHarvest()
+        external
+        view
+        override
+        returns (uint256 profit, uint256 callFeeToUser)
+    {
+        uint256 rewards = comptroller.compAccrued(address(this));
+        if (rewards == 0) {
+            return (0, 0);
+        }
+        profit = IUniswapRouter(UNI_ROUTER).getAmountsOut(rewards, screamToWftmRoute)[1];
+        uint256 wftmFee = (profit * totalFee) / PERCENT_DIVISOR;
+        callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
+        profit -= wftmFee;
+    }
+
+    //emergency function that we can use to deleverage manually if something is broken
+    function manualDeleverage(uint256 amount) external {
+        _onlyStrategistOrOwner();
+        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error");
+        require(cWant.repayBorrow(amount) == 0, "Scream returned an error");
+    }
+
+    //emergency function that we can use to deleverage manually if something is broken
+    function manualReleaseWant(uint256 amount) external {
+        _onlyStrategistOrOwner();
+        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error"); // dev: !manual-release-want
+    }
+
+    function setTargetLtv(uint256 _ltv)
+        external
+        
+    {
+        _onlyStrategistOrOwner();
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
+            address(cWant)
+        );
+        require(collateralFactorMantissa > _ltv, "Ltv above max level");
+        targetLTV = _ltv;
+    }
+
+    /**
+     * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
+     * vault, ready to be migrated to the new strat.
+     */
+    function retireStrat() external {
+        require(msg.sender == vault, "!vault");
+        _claimRewards();
+        _swapRewardsToWftm();
+        _swapToWant();
+
+        uint256 maxAmount = type(uint256).max;
+        _deleverage(maxAmount);
+        _withdrawUnderlyingToVault(maxAmount, false);
+    }
+
+    /**
+     * @dev Pauses supplied. Withdraws all funds from the AceLab contract, leaving rewards behind.
+     */
+    function panic() external {
+        console.log("--------------------------------------");
+        console.log("panic()");
+        _onlyStrategistOrOwner();
+    
+        uint256 maxAmount = type(uint256).max;
+        _deleverage(maxAmount);
+        _withdrawUnderlyingToVault(maxAmount, false);
+
+        pause();
+    }
+
+    /**
+     * @dev Unpauses the strat.
+     */
+    function unpause() external {
+        _onlyStrategistOrOwner();
+        _unpause();
+
+        _giveAllowances();
+
+        deposit();
+    }
+
+    /**
+     * @dev Pauses the strat.
+     */
+    function pause() public {
+        _onlyStrategistOrOwner();
+        _pause();
+        _removeAllowances();
+    }
+
+    /**
      * @dev Function that puts the funds to work.
      * It gets called whenever someone supplied in the strategy's vault contract.
      * It supplied {XTAROT} into xBoo (BooMirrorWorld) to farm {xBoo} and finally,
@@ -110,6 +259,82 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             console.log("No leveraging");
         }
         updateBalance();
+    }
+
+    
+    // calculate the total underlying {want} held by the strat.
+    function balanceOf() public override view returns (uint256) {
+        console.log("balanceOfWant(): ", balanceOfWant());
+        console.log("balanceOfPool(): ", balanceOfPool);
+        return balanceOfWant() + balanceOfPool;
+    }
+
+    // it calculates how much {want} this contract holds.
+    function balanceOfWant() public view returns (uint256) {
+        console.log("balanceOfWant()");
+        uint256 _balanceOfWant = IERC20(want).balanceOf(address(this));
+        console.log("_balanceOfWant: ", _balanceOfWant);
+        return IERC20(want).balanceOf(address(this));
+    }
+
+    //Calculate how many blocks until we are in liquidation based on current interest rates
+    //WARNING does not include compounding so the estimate becomes more innacurate the further ahead we look
+    //equation. Compound doesn't include compounding for most blocks
+    //((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
+    function getblocksUntilLiquidation() public view returns (uint256) {
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
+            address(cWant)
+        );
+
+        (uint256 supplied, uint256 borrowed) = getCurrentPosition();
+
+        uint256 borrrowRate = cWant.borrowRatePerBlock();
+
+        uint256 supplyRate = cWant.supplyRatePerBlock();
+
+        uint256 collateralisedDeposit = supplied
+            * collateralFactorMantissa
+            / MANTISSA;
+
+        uint256 borrowCost = borrowed * borrrowRate;
+        uint256 supplyGain = collateralisedDeposit * supplyRate;
+
+        if (supplyGain >= borrowCost) {
+            return type(uint256).max;
+        } else {
+            uint256 netSupplied = collateralisedDeposit - borrowed;
+            uint256 totalCost = borrowCost - supplyGain;
+            //minus 1 for this block
+            return netSupplied * MANTISSA / totalCost;
+        }
+    }
+
+    //Returns the current position
+    //WARNING - this returns just the balance at last time someone touched the cToken token. Does not accrue interst in between
+    //cToken is very active so not normally an issue.
+    function getCurrentPosition()
+        public
+        view
+        returns (uint256 supplied, uint256 borrowed)
+    {
+        (
+            ,
+            uint256 cWantBalance,
+            uint256 borrowBalance,
+            uint256 exchangeRate
+        ) = cWant.getAccountSnapshot(address(this));
+        borrowed = borrowBalance;
+
+        supplied = cWantBalance * exchangeRate / MANTISSA;
+    }
+
+    function updateBalance() public {
+        console.log("updateBalance()");
+        uint256 supplyBal = CErc20I(cWant).balanceOfUnderlying(address(this));
+        uint256 borrowBal = CErc20I(cWant).borrowBalanceCurrent(address(this));
+        console.log("supplyBal: ", supplyBal);
+        console.log("borrowBal: ", borrowBal);
+        balanceOfPool = supplyBal - borrowBal;
     }
 
     function _leverMax() internal {
@@ -187,14 +412,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             );
     }
 
-    function _shouldLeverage(uint256 _ltv) public view returns (bool) {
+    function _shouldLeverage(uint256 _ltv) internal view returns (bool) {
         if (_ltv < targetLTV - allowedLTVDrift) {
             return true;
         }
         return false;
     }
 
-    function _shouldDeleverage(uint256 _ltv) public view returns (bool) {
+    function _shouldDeleverage(uint256 _ltv) internal view returns (bool) {
         if (_ltv > targetLTV + allowedLTVDrift) {
             return true;
         }
@@ -214,27 +439,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         console.log("ltv: ", ltv);
     }
 
-    function calculateLTV()
-        external
-        view
-        returns (uint256 ltv)
-    {
-        (
-            ,
-            uint256 cWantBalance,
-            uint256 borrowed,
-            uint256 exchangeRate
-        ) = cWant.getAccountSnapshot(address(this));
-
-        uint256 supplied = cWantBalance * exchangeRate / MANTISSA;
-
-        if (supplied == 0 || borrowed == 0) {
-            return 0;
-        }
-
-         ltv = MANTISSA * borrowed / supplied;
-    }
-
     function _calculateLTVAfterWithdraw(uint256 _withdrawAmount) internal returns(uint256 ltv) {
         console.log("_calculateLTVAfterWithdraw: ");
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
@@ -249,39 +453,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
         ltv = uint256(1e18) * borrowed / supplied;
         console.log("ltv: ", ltv);
-    }
-
-
-    /**
-     * @dev Withdraws funds and sents them back to the vault.
-     * It withdraws {XTAROT} from the XStakingPoolController pools.
-     * The available {XTAROT} minus fees is returned to the vault.
-     */
-    function withdraw(uint256 _amount) external {
-        require(msg.sender == vault, "!vault");
-        console.log("withdraw");
-
-        uint256 _ltv = _calculateLTVAfterWithdraw(_amount);
-        console.log("_ltv: ", _ltv);
-
-        if(_shouldLeverage(_ltv)) {
-            console.log("_shouldLeverage");
-            // Strategy is underleveraged so can withdraw underlying directly
-            _withdrawUnderlyingToVault(_amount, true);
-            _leverMax();
-        } else if (_shouldDeleverage(_ltv)) {
-            console.log("_shouldDeleverage");
-            _deleverage(_amount);
-            console.log("deleveraged");
-            
-            // Strategy has deleveraged to the point where it can withdraw underlying
-            _withdrawUnderlyingToVault(_amount, true);
-        } else {
-            // LTV is in the acceptable range so the underlying can be withdrawn directly
-            console.log("do nothing");
-            _withdrawUnderlyingToVault(_amount, true);
-        }
-        updateBalance();
     }
 
     function _withdrawUnderlyingToVault(uint256 _amount, bool _useWithdrawFee) internal {
@@ -506,152 +677,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
-     * @dev Returns the approx amount of profit from harvesting.
-     *      Profit is denominated in WFTM, and takes fees into account.
-     */
-    function estimateHarvest()
-        external
-        view
-        override
-        returns (uint256 profit, uint256 callFeeToUser)
-    {
-        uint256 rewards = comptroller.compAccrued(address(this));
-        if (rewards == 0) {
-            return (0, 0);
-        }
-        profit = IUniswapRouter(UNI_ROUTER).getAmountsOut(rewards, screamToWftmRoute)[1];
-        uint256 wftmFee = (profit * totalFee) / PERCENT_DIVISOR;
-        callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
-        profit -= wftmFee;
-    }
-
-    // calculate the total underlying {want} held by the strat.
-    function balanceOf() public override view returns (uint256) {
-        console.log("balanceOfWant(): ", balanceOfWant());
-        console.log("balanceOfPool(): ", balanceOfPool);
-        return balanceOfWant() + balanceOfPool;
-    }
-
-    // it calculates how much {want} this contract holds.
-    function balanceOfWant() public view returns (uint256) {
-        console.log("balanceOfWant()");
-        uint256 _balanceOfWant = IERC20(want).balanceOf(address(this));
-        console.log("_balanceOfWant: ", _balanceOfWant);
-        return IERC20(want).balanceOf(address(this));
-    }
-
-    //Calculate how many blocks until we are in liquidation based on current interest rates
-    //WARNING does not include compounding so the estimate becomes more innacurate the further ahead we look
-    //equation. Compound doesn't include compounding for most blocks
-    //((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
-    function getblocksUntilLiquidation() public view returns (uint256) {
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
-            address(cWant)
-        );
-
-        (uint256 supplied, uint256 borrowed) = getCurrentPosition();
-
-        uint256 borrrowRate = cWant.borrowRatePerBlock();
-
-        uint256 supplyRate = cWant.supplyRatePerBlock();
-
-        uint256 collateralisedDeposit = supplied
-            * collateralFactorMantissa
-            / MANTISSA;
-
-        uint256 borrowCost = borrowed * borrrowRate;
-        uint256 supplyGain = collateralisedDeposit * supplyRate;
-
-        if (supplyGain >= borrowCost) {
-            return type(uint256).max;
-        } else {
-            uint256 netSupplied = collateralisedDeposit - borrowed;
-            uint256 totalCost = borrowCost - supplyGain;
-            //minus 1 for this block
-            return netSupplied * MANTISSA / totalCost;
-        }
-    }
-
-    //Returns the current position
-    //WARNING - this returns just the balance at last time someone touched the cToken token. Does not accrue interst in between
-    //cToken is very active so not normally an issue.
-    function getCurrentPosition()
-        public
-        view
-        returns (uint256 supplied, uint256 borrowed)
-    {
-        (
-            ,
-            uint256 cWantBalance,
-            uint256 borrowBalance,
-            uint256 exchangeRate
-        ) = cWant.getAccountSnapshot(address(this));
-        borrowed = borrowBalance;
-
-        supplied = cWantBalance * exchangeRate / MANTISSA;
-    }
-
-    function updateBalance() public {
-        console.log("updateBalance()");
-        uint256 supplyBal = CErc20I(cWant).balanceOfUnderlying(address(this));
-        uint256 borrowBal = CErc20I(cWant).borrowBalanceCurrent(address(this));
-        console.log("supplyBal: ", supplyBal);
-        console.log("borrowBal: ", borrowBal);
-        balanceOfPool = supplyBal - borrowBal;
-    }
-
-    /**
-     * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
-     * vault, ready to be migrated to the new strat.
-     */
-    function retireStrat() external {
-        require(msg.sender == vault, "!vault");
-        _claimRewards();
-        _swapRewardsToWftm();
-        _swapToWant();
-
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
-    }
-
-    /**
-     * @dev Pauses supplied. Withdraws all funds from the AceLab contract, leaving rewards behind.
-     */
-    function panic() public {
-        console.log("--------------------------------------");
-        console.log("panic()");
-        _onlyStrategistOrOwner();
-    
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
-
-        pause();
-    }
-
-    /**
-     * @dev Pauses the strat.
-     */
-    function pause() public {
-        _onlyStrategistOrOwner();
-        _pause();
-        _removeAllowances();
-    }
-
-    /**
-     * @dev Unpauses the strat.
-     */
-    function unpause() external {
-        _onlyStrategistOrOwner();
-        _unpause();
-
-        _giveAllowances();
-
-        deposit();
-    }
-
-    /**
      * @dev Gives max allowance of {XTAROT} for the {xBoo} contract,
      * {xBoo} allowance for the {POOL_CONTROLLER} contract,
      * {WFTM} allowance for the {UNI_ROUTER}
@@ -676,30 +701,5 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         IERC20(want).safeApprove(address(cWant), 0);
         IERC20(WFTM).safeApprove(UNI_ROUTER, 0);
         IERC20(SCREAM).safeApprove(UNI_ROUTER, 0);
-    }
-
-    //emergency function that we can use to deleverage manually if something is broken
-    function manualDeleverage(uint256 amount) external {
-        _onlyStrategistOrOwner();
-        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error");
-        require(cWant.repayBorrow(amount) == 0, "Scream returned an error");
-    }
-
-    //emergency function that we can use to deleverage manually if something is broken
-    function manualReleaseWant(uint256 amount) external {
-        _onlyStrategistOrOwner();
-        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error"); // dev: !manual-release-want
-    }
-
-    function setTargetLtv(uint256 _ltv)
-        external
-        
-    {
-        _onlyStrategistOrOwner();
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
-            address(cWant)
-        );
-        require(collateralFactorMantissa > _ltv, "Ltv above max level");
-        targetLTV = _ltv;
     }
 }
