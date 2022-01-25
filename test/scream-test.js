@@ -231,7 +231,7 @@ describe("Vaults", function () {
       await vault.connect(wantWhale).deposit(whaleDepositAmount);
       const selfWantBalance = await vault.balanceOf(selfAddress);
       console.log(selfWantBalance.toString());
-      const ownerDepositAmount = ethers.utils.parseEther("5");
+      const ownerDepositAmount = ethers.utils.parseEther("1");
       await want.connect(self).transfer(ownerAddress, ownerDepositAmount);
       const ownerBalance = await want.balanceOf(ownerAddress);
 
