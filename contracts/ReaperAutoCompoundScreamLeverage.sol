@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
 
-import "./abstract/ReaperBaseStrategy.sol";
-import "./interfaces/IUniswapRouter.sol";
-import "./interfaces/CErc20I.sol";
-import "./interfaces/IComptroller.sol";
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import './abstract/ReaperBaseStrategy.sol';
+import './interfaces/IUniswapRouter.sol';
+import './interfaces/CErc20I.sol';
+import './interfaces/IComptroller.sol';
+import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 
 pragma solidity 0.8.9;
 
@@ -21,19 +21,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * {want} - The vault token the strategy is maximizing
      * {cWant} - The Scream version of the want token
      */
-     address public constant WFTM =
-        0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
+    address public constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant SCREAM = 0xe0654C8e6fd4D733349ac7E09f6f23DA256bF475;
     address public immutable want;
     CErc20I public immutable cWant;
-    
+
     /**
      * @dev Third Party Contracts:
      * {UNI_ROUTER} - the UNI_ROUTER for target DEX
      * {comptroller} - Scream contract to enter market and to claim Scream tokens
      */
-    address public constant UNI_ROUTER =
-        0xF491e7B69E4244ad4002BC14e878a34207E38c29;
+    address public constant UNI_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
     IComptroller public immutable comptroller;
 
     /**
@@ -43,7 +41,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     address[] public screamToWftmRoute = [SCREAM, WFTM];
     address[] public wftmToWantRoute;
-    
+
     /**
      * @dev Scream variables
      * {markets} - Contains the Scream tokens to farm, used to enter markets and claim Scream
@@ -95,17 +93,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * The available {want} minus fees is returned to the vault.
      */
     function withdraw(uint256 _withdrawAmount) external {
-        require(msg.sender == vault, "!vault");
+        require(msg.sender == vault, '!vault');
 
         uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
 
-        if(_shouldLeverage(_ltv)) {
+        if (_shouldLeverage(_ltv)) {
             // Strategy is underleveraged so can withdraw underlying directly
             _withdrawUnderlyingToVault(_withdrawAmount, true);
             _leverMax();
         } else if (_shouldDeleverage(_ltv)) {
             _deleverage(_withdrawAmount);
-            
+
             // Strategy has deleveraged to the point where it can withdraw underlying
             _withdrawUnderlyingToVault(_withdrawAmount, true);
         } else {
@@ -120,37 +118,23 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * depends on the cWant being updated to be accurate.
      * Does not update in order provide a view function for LTV.
      */
-    function calculateLTV()
-        external
-        view
-        returns (uint256 ltv)
-    {
-        (
-            ,
-            uint256 cWantBalance,
-            uint256 borrowed,
-            uint256 exchangeRate
-        ) = cWant.getAccountSnapshot(address(this));
+    function calculateLTV() external view returns (uint256 ltv) {
+        (, uint256 cWantBalance, uint256 borrowed, uint256 exchangeRate) = cWant.getAccountSnapshot(address(this));
 
-        uint256 supplied = cWantBalance * exchangeRate / MANTISSA;
+        uint256 supplied = (cWantBalance * exchangeRate) / MANTISSA;
 
         if (supplied == 0 || borrowed == 0) {
             return 0;
         }
 
-         ltv = MANTISSA * borrowed / supplied;
+        ltv = (MANTISSA * borrowed) / supplied;
     }
 
     /**
      * @dev Returns the approx amount of profit from harvesting.
      *      Profit is denominated in WFTM, and takes fees into account.
      */
-    function estimateHarvest()
-        external
-        view
-        override
-        returns (uint256 profit, uint256 callFeeToUser)
-    {
+    function estimateHarvest() external view override returns (uint256 profit, uint256 callFeeToUser) {
         uint256 rewards = comptroller.compAccrued(address(this));
         if (rewards == 0) {
             return (0, 0);
@@ -166,8 +150,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function manualDeleverage(uint256 amount) external {
         _onlyStrategistOrOwner();
-        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error");
-        require(cWant.repayBorrow(amount) == 0, "Scream returned an error");
+        require(cWant.redeemUnderlying(amount) == 0, 'Scream returned an error');
+        require(cWant.repayBorrow(amount) == 0, 'Scream returned an error');
     }
 
     /**
@@ -175,22 +159,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function manualReleaseWant(uint256 amount) external {
         _onlyStrategistOrOwner();
-        require(cWant.redeemUnderlying(amount) == 0, "Scream returned an error");
+        require(cWant.redeemUnderlying(amount) == 0, 'Scream returned an error');
     }
 
     /**
      * @dev Sets a new LTV for leveraging.
      * Should be in units of 1e18
      */
-    function setTargetLtv(uint256 _ltv)
-        external
-        
-    {
+    function setTargetLtv(uint256 _ltv) external {
         _onlyStrategistOrOwner();
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
-            address(cWant)
-        );
-        require(collateralFactorMantissa > _ltv + allowedLTVDrift, "Ltv above max level");
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
+        require(collateralFactorMantissa > _ltv + allowedLTVDrift, 'Ltv above max level');
         targetLTV = _ltv;
     }
 
@@ -198,27 +177,19 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Sets a new allowed LTV drift
      * Should be in units of 1e18
      */
-    function setAllowedLtvDrift(uint256 _drift)
-        external
-        
-    {
+    function setAllowedLtvDrift(uint256 _drift) external {
         _onlyStrategistOrOwner();
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
-            address(cWant)
-        );
-        require(collateralFactorMantissa > targetLTV + _drift, "Ltv above max level");
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
+        require(collateralFactorMantissa > targetLTV + _drift, 'Ltv above max level');
         allowedLTVDrift = _drift;
     }
 
     /**
      * @dev Sets a new borrow depth (how many loops for leveraging+deleveraging)
      */
-    function setBorrowDepth(uint8 _borrowDepth)
-        external
-        
-    {
+    function setBorrowDepth(uint8 _borrowDepth) external {
         _onlyStrategistOrOwner();
-        require(_borrowDepth <= MAX_BORROW_DEPTH, "Above max borrow depth");
+        require(_borrowDepth <= MAX_BORROW_DEPTH, 'Above max borrow depth');
         borrowDepth = _borrowDepth;
     }
 
@@ -235,7 +206,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * vault, ready to be migrated to the new strat.
      */
     function retireStrat() external {
-        require(msg.sender == vault, "!vault");
+        require(msg.sender == vault, '!vault');
         _claimRewards();
         _swapRewardsToWftm();
         _swapToWant();
@@ -250,7 +221,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function panic() external {
         _onlyStrategistOrOwner();
-    
+
         uint256 maxAmount = type(uint256).max;
         _deleverage(maxAmount);
         _withdrawUnderlyingToVault(maxAmount, false);
@@ -288,7 +259,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         CErc20I(cWant).mint(balanceOfWant());
         uint256 _ltv = _calculateLTV();
 
-        if(_shouldLeverage(_ltv)) {
+        if (_shouldLeverage(_ltv)) {
             _leverMax();
         } else if (_shouldDeleverage(_ltv)) {
             _deleverage(0);
@@ -296,12 +267,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         updateBalance();
     }
 
-    
     /**
      * @dev Calculates the total amount of {want} held by the strategy
      * which is the balance of want + the total amount supplied to Scream.
      */
-    function balanceOf() public override view returns (uint256) {
+    function balanceOf() public view override returns (uint256) {
         return balanceOfWant() + balanceOfPool;
     }
 
@@ -319,9 +289,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Equation: ((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
      */
     function getblocksUntilLiquidation() public view returns (uint256) {
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
-            address(cWant)
-        );
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
 
         (uint256 supplied, uint256 borrowed) = getCurrentPosition();
 
@@ -329,9 +297,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         uint256 supplyRate = cWant.supplyRatePerBlock();
 
-        uint256 collateralisedDeposit = supplied
-            * collateralFactorMantissa
-            / MANTISSA;
+        uint256 collateralisedDeposit = (supplied * collateralFactorMantissa) / MANTISSA;
 
         uint256 borrowCost = borrowed * borrrowRate;
         uint256 supplyGain = collateralisedDeposit * supplyRate;
@@ -342,7 +308,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             uint256 netSupplied = collateralisedDeposit - borrowed;
             uint256 totalCost = borrowCost - supplyGain;
             //minus 1 for this block
-            return netSupplied * MANTISSA / totalCost;
+            return (netSupplied * MANTISSA) / totalCost;
         }
     }
 
@@ -350,20 +316,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Returns the current position in Scream. Does not accrue interest
      * so might not be accurate, but the cWant is usually updated.
      */
-    function getCurrentPosition()
-        public
-        view
-        returns (uint256 supplied, uint256 borrowed)
-    {
-        (
-            ,
-            uint256 cWantBalance,
-            uint256 borrowBalance,
-            uint256 exchangeRate
-        ) = cWant.getAccountSnapshot(address(this));
+    function getCurrentPosition() public view returns (uint256 supplied, uint256 borrowed) {
+        (, uint256 cWantBalance, uint256 borrowBalance, uint256 exchangeRate) = cWant.getAccountSnapshot(address(this));
         borrowed = borrowBalance;
 
-        supplied = cWantBalance * exchangeRate / MANTISSA;
+        supplied = (cWantBalance * exchangeRate) / MANTISSA;
     }
 
     /**
@@ -387,14 +344,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 newBorrow = _getMaxBorrowFromSupplied(realSupply, targetLTV);
         uint256 totalAmountToBorrow = newBorrow - borrowed;
 
-        for (
-                uint8 i = 0;
-                i < borrowDepth && totalAmountToBorrow > minWantToLeverage;
-                i++
-            ) {
-                totalAmountToBorrow = totalAmountToBorrow -
-                    _leverUpStep(totalAmountToBorrow);
-            }
+        for (uint8 i = 0; i < borrowDepth && totalAmountToBorrow > minWantToLeverage; i++) {
+            totalAmountToBorrow = totalAmountToBorrow - _leverUpStep(totalAmountToBorrow);
+        }
     }
 
     /**
@@ -407,10 +359,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
-            address(cWant)
-        );
-        uint256 canBorrow = supplied * collateralFactorMantissa / MANTISSA;
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
+        uint256 canBorrow = (supplied * collateralFactorMantissa) / MANTISSA;
 
         canBorrow -= borrowed;
 
@@ -432,12 +382,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Gets the maximum amount allowed to be borrowed for a given collateral factor and amount supplied
      */
-    function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal pure returns(uint256) {
-        
-        return
-            ((wantSupplied * collateralFactor) /
-                (MANTISSA - collateralFactor)
-            );
+    function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal pure returns (uint256) {
+        return ((wantSupplied * collateralFactor) / (MANTISSA - collateralFactor));
     }
 
     /**
@@ -464,20 +410,20 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev This is the state changing calculation of LTV that is more accurate
      * to be used internally.
      */
-    function _calculateLTV() internal returns(uint256 ltv) {
+    function _calculateLTV() internal returns (uint256 ltv) {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
 
         if (supplied == 0 || borrowed == 0) {
             return 0;
         }
-        ltv = MANTISSA * borrowed / supplied;
+        ltv = (MANTISSA * borrowed) / supplied;
     }
 
     /**
      * @dev Calculates what the LTV will be after withdrawing
      */
-    function _calculateLTVAfterWithdraw(uint256 _withdrawAmount) internal returns(uint256 ltv) {
+    function _calculateLTVAfterWithdraw(uint256 _withdrawAmount) internal returns (uint256 ltv) {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
         supplied = supplied - _withdrawAmount;
@@ -485,7 +431,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if (supplied == 0 || borrowed == 0) {
             return 0;
         }
-        ltv = uint256(1e18) * borrowed / supplied;
+        ltv = (uint256(1e18) * borrowed) / supplied;
     }
 
     /**
@@ -499,7 +445,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if (realSupplied == 0) {
             return;
         }
-            
+
         if (_withdrawAmount > realSupplied) {
             _withdrawAmount = realSupplied;
         }
@@ -511,7 +457,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             tempColla = 1e15; // 0.001 * 1e18. lower we have issues
         }
 
-        reservedAmount = borrowed * MANTISSA / tempColla;
+        reservedAmount = (borrowed * MANTISSA) / tempColla;
         if (supplied >= reservedAmount) {
             uint256 redeemable = supplied - reservedAmount;
             uint256 balance = cWant.balanceOf(address(this));
@@ -524,13 +470,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         uint256 withdrawAmount;
 
-        if(_useWithdrawFee) {
-            uint256 withdrawFee = _withdrawAmount * securityFee / PERCENT_DIVISOR;
+        if (_useWithdrawFee) {
+            uint256 withdrawFee = (_withdrawAmount * securityFee) / PERCENT_DIVISOR;
             withdrawAmount = _withdrawAmount - withdrawFee - 1;
         } else {
             withdrawAmount = _withdrawAmount - 1;
         }
-            
+
         CErc20I(cWant).redeemUnderlying(withdrawAmount);
         IERC20(want).safeTransfer(vault, withdrawAmount);
     }
@@ -539,10 +485,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev For a given withdraw amount, figures out the new borrow with the current supply
      * that will maintain the target LTV
      */
-    function _getDesiredBorrow(uint256 _withdrawAmount)
-        internal
-        returns (uint256 position)
-    {
+    function _getDesiredBorrow(uint256 _withdrawAmount) internal returns (uint256 position) {
         //we want to use statechanging for safety
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
@@ -598,19 +541,15 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Deleverages one step
      */
-    function _leverDownStep(
-        uint256 maxDeleverage
-    ) internal returns (uint256 deleveragedAmount) {
+    function _leverDownStep(uint256 maxDeleverage) internal returns (uint256 deleveragedAmount) {
         uint256 minAllowedSupply = 0;
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(
-            address(cWant)
-        );
+        (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
 
         //collat ration should never be 0. if it is something is very wrong... but just incase
         if (collateralFactorMantissa != 0) {
-            minAllowedSupply = borrowed * MANTISSA / collateralFactorMantissa;
+            minAllowedSupply = (borrowed * MANTISSA) / collateralFactorMantissa;
         }
         uint256 maxAllowedDeleverageAmount = supplied - minAllowedSupply;
 
@@ -625,16 +564,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 exchangeRateStored = cWant.exchangeRateStored();
         //redeemTokens = redeemAmountIn * 1e18 / exchangeRate. must be more than 0
         //a rounding error means we need another small addition
-        if (
-            deleveragedAmount * MANTISSA >= exchangeRateStored &&
-            deleveragedAmount > 10
-        ) {
+        if (deleveragedAmount * MANTISSA >= exchangeRateStored && deleveragedAmount > 10) {
             deleveragedAmount -= 10; // Amount can be slightly off for tokens with less decimals (USDC), so redeem a bit less
             cWant.redeemUnderlying(deleveragedAmount);
             //our borrow has been increased by no more than maxDeleverage
             cWant.repayBorrow(deleveragedAmount);
         }
     }
+
     /**
      * @dev Core function of the strat, in charge of collecting and re-investing rewards.
      * @notice Assumes the deposit will take care of the TVL rebalancing.
@@ -642,7 +579,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * 2. Swaps {SCREAM} to {WFTM}.
      * 3. Claims fees for the harvest caller and treasury.
      * 4. Swaps the {WFTM} token for {want}
-     * 5. Deposits. 
+     * 5. Deposits.
      */
     function _harvestCore() internal override {
         _claimRewards();
@@ -670,8 +607,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function _swapRewardsToWftm() internal {
         uint256 screamBalance = IERC20(SCREAM).balanceOf(address(this));
         if (screamBalance >= minScreamToSell) {
-            IUniswapRouter(UNI_ROUTER)
-                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
                 screamBalance,
                 0,
                 screamToWftmRoute,
@@ -686,13 +622,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Charges fees based on the amount of WFTM gained from reward
      */
     function _chargeFees() internal {
-        uint256 wftmFee = IERC20(WFTM).balanceOf(address(this)) * totalFee / PERCENT_DIVISOR;
+        uint256 wftmFee = (IERC20(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
         if (wftmFee != 0) {
             uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
-            uint256 treasuryFeeToVault = (wftmFee * treasuryFee) /
-                PERCENT_DIVISOR;
-            uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) /
-                PERCENT_DIVISOR;
+            uint256 treasuryFeeToVault = (wftmFee * treasuryFee) / PERCENT_DIVISOR;
+            uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) / PERCENT_DIVISOR;
             treasuryFeeToVault -= feeToStrategist;
 
             IERC20(WFTM).safeTransfer(msg.sender, callFeeToUser);
@@ -708,14 +642,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function _swapToWant() internal {
         uint256 wftmBalance = IERC20(WFTM).balanceOf(address(this));
         if (wftmBalance != 0) {
-            IUniswapRouter(UNI_ROUTER)
-                .swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                    wftmBalance,
-                    0,
-                    wftmToWantRoute,
-                    address(this),
-                    block.timestamp + 600
-                );
+            IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                wftmBalance,
+                0,
+                wftmToWantRoute,
+                address(this),
+                block.timestamp + 600
+            );
         }
     }
 
