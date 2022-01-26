@@ -2,7 +2,6 @@
 
 import "./abstract/ReaperBaseStrategy.sol";
 import "./interfaces/IUniswapRouter.sol";
-import "./interfaces/IPaymentRouter.sol";
 import "./interfaces/CErc20I.sol";
 import "./interfaces/IComptroller.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -698,14 +697,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
             IERC20(WFTM).safeTransfer(msg.sender, callFeeToUser);
             IERC20(WFTM).safeTransfer(treasury, treasuryFeeToVault);
-            IERC20(WFTM).safeIncreaseAllowance(
-                strategistRemitter,
-                feeToStrategist
-            );
-            IPaymentRouter(strategistRemitter).routePayment(
-                WFTM,
-                feeToStrategist
-            );
+            IERC20(WFTM).safeTransfer(strategistRemitter, feeToStrategist);
         }
     }
 
