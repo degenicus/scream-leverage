@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: MIT
+// SPDX-License-Identifier: agpl-3.0
 
 pragma solidity 0.8.9;
 
@@ -29,10 +29,4 @@ interface IStrategy {
 
     //updates Total Fee
     function updateTotalFee(uint256 _totalFee) external;
-
-    //update Call Fee
-    function updateCallFee(uint256 _callFee) external;
-
-    //updates Treasury Fee
-    function updateTreasuryFee(uint256 _treasuryFee) external;
 }
