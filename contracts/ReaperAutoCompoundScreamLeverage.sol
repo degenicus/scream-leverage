@@ -6,7 +6,7 @@ import './interfaces/CErc20I.sol';
 import './interfaces/IComptroller.sol';
 import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
 
-pragma solidity 0.8.9;
+pragma solidity 0.8.11;
 
 /**
  * @dev This strategy will deposit and leverage a token on Scream to maximize yield by farming Scream tokens
