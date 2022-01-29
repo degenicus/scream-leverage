@@ -19,13 +19,11 @@ const toWantUnit = (num, isUSDC = false) => {
 describe('Vaults', function () {
   let Vault;
   let Strategy;
-  let PaymentRouter;
   let Treasury;
   let Want;
   let vault;
   let strategy;
-  let paymentRouter;
-  const paymentRouterAddress = '0x603e60d22af05ff77fdcf05c063f582c40e55aae';
+  const paymentSplitterAddress = '0x63cbd4134c2253041F370472c130e92daE4Ff174';
   let treasury;
   let want;
   // const scFUSD = "0x83fad9Bce24B605Fe149b433D62C8011070239B8";
@@ -86,7 +84,6 @@ describe('Vaults', function () {
 
     //get artifacts
     Strategy = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
-    PaymentRouter = await ethers.getContractFactory('PaymentRouter');
     Vault = await ethers.getContractFactory('ReaperVaultv1_3');
     Treasury = await ethers.getContractFactory('ReaperTreasury');
     Want = await ethers.getContractFactory('@openzeppelin/contracts/token/ERC20/ERC20.sol:ERC20');
@@ -112,14 +109,11 @@ describe('Vaults', function () {
 
     strategy = await Strategy.deploy(
       vault.address,
-      [treasury.address, paymentRouterAddress],
+      [treasury.address, paymentSplitterAddress],
       [strategistAddress],
       scWantAddress,
     );
     console.log('strategy');
-
-    paymentRouter = await PaymentRouter.attach(paymentRouterAddress);
-    await paymentRouter.connect(strategist).addStrategy(strategy.address, [strategistAddress], [100]);
 
     await vault.initialize(strategy.address);
 
@@ -402,7 +396,7 @@ describe('Vaults', function () {
       console.log(`estimatedGas: ${estimatedGas}`);
       await strategy.connect(self).harvest();
     });
-    xit('should provide yield', async function () {
+    it('should provide yield', async function () {
       const timeToSkip = 3600;
       const initialUserBalance = await want.balanceOf(selfAddress);
       const depositAmount = initialUserBalance.div(10);
