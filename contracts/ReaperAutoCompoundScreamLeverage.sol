@@ -656,20 +656,26 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Gives the necessary allowances to mint cWant, swap rewards etc
      */
     function _giveAllowances() internal {
-        IERC20(want).safeApprove(address(cWant), 0);
-        IERC20(WFTM).safeApprove(UNI_ROUTER, 0);
-        IERC20(SCREAM).safeApprove(UNI_ROUTER, 0);
-        IERC20(want).safeApprove(address(cWant), type(uint256).max);
-        IERC20(WFTM).safeApprove(UNI_ROUTER, type(uint256).max);
-        IERC20(SCREAM).safeApprove(UNI_ROUTER, type(uint256).max);
+        IERC20(want).safeIncreaseAllowance(
+            address(cWant),
+            type(uint256).max - IERC20(want).allowance(address(this), address(cWant))
+        );
+        IERC20(WFTM).safeIncreaseAllowance(
+            UNI_ROUTER,
+            type(uint256).max - IERC20(WFTM).allowance(address(this), UNI_ROUTER)
+        );
+        IERC20(SCREAM).safeIncreaseAllowance(
+            UNI_ROUTER,
+            type(uint256).max - IERC20(SCREAM).allowance(address(this), UNI_ROUTER)
+        );
     }
 
     /**
      * @dev Removes all allowance that were given
      */
     function _removeAllowances() internal {
-        IERC20(want).safeApprove(address(cWant), 0);
-        IERC20(WFTM).safeApprove(UNI_ROUTER, 0);
-        IERC20(SCREAM).safeApprove(UNI_ROUTER, 0);
+        IERC20(want).safeDecreaseAllowance(address(cWant), IERC20(want).allowance(address(this), address(cWant)));
+        IERC20(WFTM).safeDecreaseAllowance(UNI_ROUTER, IERC20(WFTM).allowance(address(this), UNI_ROUTER));
+        IERC20(SCREAM).safeDecreaseAllowance(UNI_ROUTER, IERC20(SCREAM).allowance(address(this), UNI_ROUTER));
     }
 }
