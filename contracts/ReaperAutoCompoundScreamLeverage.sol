@@ -135,7 +135,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      *      Profit is denominated in WFTM, and takes fees into account.
      */
     function estimateHarvest() external view override returns (uint256 profit, uint256 callFeeToUser) {
-        uint256 rewards = comptroller.compAccrued(address(this));
+        uint256 rewards = predictScreamAccrued();
         if (rewards == 0) {
             return (0, 0);
         }
@@ -196,7 +196,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Sets the minimum reward the will be sold (too little causes revert from Uniswap)
      */
-    function setMinCompToSell(uint256 _minScreamToSell) external {
+    function setMinScreamToSell(uint256 _minScreamToSell) external {
         _onlyStrategistOrOwner();
         minScreamToSell = _minScreamToSell;
     }
@@ -321,6 +321,51 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         borrowed = borrowBalance;
 
         supplied = (cWantBalance * exchangeRate) / MANTISSA;
+    }
+
+    /**
+     * @dev This function makes a prediction on how much {SCREAM} is accrued.
+     *      It is not 100% accurate as it uses current balances in Compound to predict into the past.
+     */
+    function predictScreamAccrued() public view returns (uint256) {
+        // Has no previous log to compare harvest time to
+        if (harvestLog.length == 0) {
+            return 0;
+        }
+        (uint256 supplied, uint256 borrowed) = getCurrentPosition();
+        if (supplied == 0) {
+            return 0; // should be impossible to have 0 balance and positive comp accrued
+        }
+
+        uint256 distributionPerBlock = comptroller.compSpeeds(address(cWant));
+
+        uint256 totalBorrow = cWant.totalBorrows();
+
+        //total supply needs to be exchanged to underlying using exchange rate
+        uint256 totalSupplyCtoken = cWant.totalSupply();
+        uint256 totalSupply = totalSupplyCtoken
+            * cWant.exchangeRateStored()
+            / MANTISSA;
+
+        uint256 blockShareSupply = 0;
+        if (totalSupply > 0) {
+            blockShareSupply = supplied * distributionPerBlock / totalSupply;
+        }
+
+        uint256 blockShareBorrow = 0;
+        if (totalBorrow > 0) {
+            blockShareBorrow = borrowed * distributionPerBlock / totalBorrow;
+        }
+
+        //how much we expect to earn per block
+        uint256 blockShare = blockShareSupply + blockShareBorrow;
+        uint256 secondsPerBlock = 1; // Average FTM block speed
+
+        //last time we ran harvest
+        uint256 lastHarvestTime = harvestLog[harvestLog.length - 1].timestamp;
+        uint256 blocksSinceLast = block.timestamp - lastHarvestTime / secondsPerBlock;
+
+        return blocksSinceLast * blockShare;
     }
 
     /**

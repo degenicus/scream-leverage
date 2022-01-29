@@ -17,5 +17,5 @@ interface IComptroller {
             uint256,
             bool
         );
-
+    function compSpeeds(address ctoken) external view returns (uint256); // will be deprecated
 }
