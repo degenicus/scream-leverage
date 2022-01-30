@@ -201,6 +201,15 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         minScreamToSell = _minScreamToSell;
     }
 
+
+    /**
+     * @dev Sets the minimum want to leverage/deleverage (loop) for
+     */
+    function setMinWantToLeverage(uint256 _minWantToLeverage) external {
+        _onlyStrategistOrOwner();
+        minWantToLeverage = _minWantToLeverage;
+    }
+    
     /**
      * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
      * vault, ready to be migrated to the new strat.
@@ -217,7 +226,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
-     * @dev Pauses supplied. Withdraws all funds from the AceLab contract, leaving rewards behind.
+     * @dev Pauses supplied. Withdraws all funds from Scream, leaving rewards behind.
      */
     function panic() external {
         _onlyStrategistOrOwner();
