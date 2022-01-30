@@ -694,6 +694,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Swaps {WFTM} for {want}
      */
     function _swapToWant() internal {
+        if (want == WFTM) {
+            return;
+        }
+        
         uint256 wftmBalance = IERC20(WFTM).balanceOf(address(this));
         if (wftmBalance != 0) {
             IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
