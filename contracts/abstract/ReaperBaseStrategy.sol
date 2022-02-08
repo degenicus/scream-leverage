@@ -4,11 +4,17 @@ pragma solidity 0.8.11;
 
 import "../interfaces/IStrategy.sol";
 import "../interfaces/IVault.sol";
-import "@openzeppelin/contracts/access/AccessControlEnumerable.sol";
-import "@openzeppelin/contracts/security/Pausable.sol";
-import "@openzeppelin/contracts/utils/Address.sol";
+import "@openzeppelin/contracts-upgradeable/access/AccessControlEnumerableUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import "@openzeppelin/contracts-upgradeable/security/PausableUpgradeable.sol";
 
-abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable, IStrategy {
+abstract contract ReaperBaseStrategy is
+    IStrategy,
+    UUPSUpgradeable,
+    AccessControlEnumerableUpgradeable,
+    PausableUpgradeable
+{
     uint256 public constant PERCENT_DIVISOR = 10_000;
     uint256 public constant ONE_YEAR = 365 days;
 
@@ -18,7 +24,7 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable, IStra
     }
 
     Harvest[] public harvestLog;
-    uint256 public harvestLogCadence = 1 hours;
+    uint256 public harvestLogCadence;
     uint256 public lastHarvestTimestamp;
 
     /**
@@ -32,10 +38,9 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable, IStra
      * {treasury} - Address of the Reaper treasury
      * {vault} - Address of the vault that controls the strategy's funds.
      * {strategistRemitter} - Address where strategist fee is remitted to.
-     *                        Must be an IPaymentRouter contract.
      */
     address public treasury;
-    address public immutable vault;
+    address public vault;
     address public strategistRemitter;
 
     /**
@@ -62,11 +67,11 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable, IStra
      * {securityFee} - Fee taxed when a user withdraws funds. Taken to prevent flash deposit/harvest attacks.
      * These funds are redistributed to stakers in the pool.
      */
-    uint256 public totalFee = 450;
-    uint256 public callFee = 1000;
-    uint256 public treasuryFee = 9000;
-    uint256 public strategistFee = 2500;
-    uint256 public securityFee = 10;
+    uint256 public totalFee;
+    uint256 public callFee;
+    uint256 public treasuryFee;
+    uint256 public strategistFee;
+    uint256 public securityFee;
 
     /**
      * {TotalFeeUpdated} Event that is fired each time the total fee is updated.
@@ -79,11 +84,25 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable, IStra
     event StratHarvest(address indexed harvester);
     event StrategistRemitterUpdated(address newStrategistRemitter);
 
-    constructor(
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() initializer {}
+
+    function __ReaperBaseStrategy_init(
         address _vault,
         address[] memory _feeRemitters,
         address[] memory _strategists
-    ) {
+    ) internal onlyInitializing {
+        __UUPSUpgradeable_init();
+        __AccessControlEnumerable_init();
+        __Pausable_init_unchained();
+
+        harvestLogCadence = 1 hours;
+        totalFee = 450;
+        callFee = 1000;
+        treasuryFee = 9000;
+        strategistFee = 2500;
+        securityFee = 10;
+
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
 
         vault = _vault;
@@ -274,6 +293,12 @@ abstract contract ReaperBaseStrategy is AccessControlEnumerable, Pausable, IStra
 
         return -int256(yearlyUnsignedPercentageChange);
     }
+
+    /**
+     * @dev This function must be overriden simply for access control purposes.
+     *      Only DEFAULT_ADMIN_ROLE can upgrade the implementation.
+     */
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     /**
      * @dev Returns the approx amount of profit from harvesting plus fee that

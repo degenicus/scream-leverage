@@ -4,7 +4,7 @@ import './abstract/ReaperBaseStrategy.sol';
 import './interfaces/IUniswapRouter.sol';
 import './interfaces/CErc20I.sol';
 import './interfaces/IComptroller.sol';
-import '@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol';
+import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
 
 pragma solidity 0.8.11;
 
@@ -12,7 +12,7 @@ pragma solidity 0.8.11;
  * @dev This strategy will deposit and leverage a token on Scream to maximize yield by farming Scream tokens
  */
 contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
-    using SafeERC20 for IERC20;
+    using SafeERC20Upgradeable for IERC20Upgradeable;
 
     /**
      * @dev Tokens Used:
@@ -23,8 +23,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     address public constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant SCREAM = 0xe0654C8e6fd4D733349ac7E09f6f23DA256bF475;
-    address public immutable want;
-    CErc20I public immutable cWant;
+    address public want;
+    CErc20I public cWant;
 
     /**
      * @dev Third Party Contracts:
@@ -32,14 +32,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * {comptroller} - Scream contract to enter market and to claim Scream tokens
      */
     address public constant UNI_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
-    IComptroller public immutable comptroller;
+    IComptroller public comptroller;
 
     /**
      * @dev Routes we take to swap tokens
      * {screamToWftmRoute} - Route we take to get from {SCREAM} into {WFTM}.
      * {wftmToWantRoute} - Route we take to get from {WFTM} into {want}.
      */
-    address[] public screamToWftmRoute = [SCREAM, WFTM];
+    address[] public screamToWftmRoute;
     address[] public wftmToWantRoute;
 
     /**
@@ -58,29 +58,39 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * {borrowDepth} - The maximum amount of loops used to leverage and deleverage
      * {minWantToLeverage} - The minimum amount of want to leverage in a loop
      */
-    uint256 public targetLTV = 0.73 ether;
-    uint256 public allowedLTVDrift = 0.01 ether;
-    uint256 public balanceOfPool = 0;
-    uint256 public borrowDepth = 12;
-    uint256 public minWantToLeverage = 1000;
-    uint256 public constant MAX_BORROW_DEPTH = 15;
-    uint256 public minScreamToSell = 0.01 ether;
+    uint256 public targetLTV;
+    uint256 public allowedLTVDrift;
+    uint256 public balanceOfPool;
+    uint256 public borrowDepth;
+    uint256 public minWantToLeverage;
+    uint256 public maxBorrowDepth;
+    uint256 public minScreamToSell;
 
     /**
      * @dev Initializes the strategy. Sets parameters, saves routes, and gives allowances.
      * @notice see documentation for each variable above its respective declaration.
      */
-    constructor(
+    function initialize(
         address _vault,
         address[] memory _feeRemitters,
         address[] memory _strategists,
         address _scWant
-    ) ReaperBaseStrategy(_vault, _feeRemitters, _strategists) {
+    ) public initializer {
+        __ReaperBaseStrategy_init(_vault, _feeRemitters, _strategists);
         cWant = CErc20I(_scWant);
         markets = [_scWant];
         comptroller = IComptroller(cWant.comptroller());
         want = cWant.underlying();
         wftmToWantRoute = [WFTM, want];
+        screamToWftmRoute = [SCREAM, WFTM];
+
+        targetLTV = 0.73 ether;
+        allowedLTVDrift = 0.01 ether;
+        balanceOfPool = 0;
+        borrowDepth = 12;
+        minWantToLeverage = 1000;
+        maxBorrowDepth = 15;
+        minScreamToSell = 1000;
 
         _giveAllowances();
 
@@ -189,7 +199,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function setBorrowDepth(uint8 _borrowDepth) external {
         _onlyStrategistOrOwner();
-        require(_borrowDepth <= MAX_BORROW_DEPTH, 'Above max borrow depth');
+        require(_borrowDepth <= maxBorrowDepth, 'Above max borrow depth');
         borrowDepth = _borrowDepth;
     }
 
@@ -288,7 +298,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Calculates the balance of want held directly by the strategy
      */
     function balanceOfWant() public view returns (uint256) {
-        return IERC20(want).balanceOf(address(this));
+        return IERC20Upgradeable(want).balanceOf(address(this));
     }
 
     /**
@@ -532,7 +542,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
 
         CErc20I(cWant).redeemUnderlying(withdrawAmount);
-        IERC20(want).safeTransfer(vault, withdrawAmount);
+        IERC20Upgradeable(want).safeTransfer(vault, withdrawAmount);
     }
 
     /**
@@ -659,7 +669,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Swaps {SCREAM} to {WFTM}
      */
     function _swapRewardsToWftm() internal {
-        uint256 screamBalance = IERC20(SCREAM).balanceOf(address(this));
+        uint256 screamBalance = IERC20Upgradeable(SCREAM).balanceOf(address(this));
         if (screamBalance >= minScreamToSell) {
             IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
                 screamBalance,
@@ -676,16 +686,16 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Charges fees based on the amount of WFTM gained from reward
      */
     function _chargeFees() internal {
-        uint256 wftmFee = (IERC20(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
+        uint256 wftmFee = (IERC20Upgradeable(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
         if (wftmFee != 0) {
             uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
             uint256 treasuryFeeToVault = (wftmFee * treasuryFee) / PERCENT_DIVISOR;
             uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) / PERCENT_DIVISOR;
             treasuryFeeToVault -= feeToStrategist;
 
-            IERC20(WFTM).safeTransfer(msg.sender, callFeeToUser);
-            IERC20(WFTM).safeTransfer(treasury, treasuryFeeToVault);
-            IERC20(WFTM).safeTransfer(strategistRemitter, feeToStrategist);
+            IERC20Upgradeable(WFTM).safeTransfer(msg.sender, callFeeToUser);
+            IERC20Upgradeable(WFTM).safeTransfer(treasury, treasuryFeeToVault);
+            IERC20Upgradeable(WFTM).safeTransfer(strategistRemitter, feeToStrategist);
         }
     }
 
@@ -698,7 +708,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             return;
         }
         
-        uint256 wftmBalance = IERC20(WFTM).balanceOf(address(this));
+        uint256 wftmBalance = IERC20Upgradeable(WFTM).balanceOf(address(this));
         if (wftmBalance != 0) {
             IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
                 wftmBalance,
@@ -714,17 +724,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Gives the necessary allowances to mint cWant, swap rewards etc
      */
     function _giveAllowances() internal {
-        IERC20(want).safeIncreaseAllowance(
+        IERC20Upgradeable(want).safeIncreaseAllowance(
             address(cWant),
-            type(uint256).max - IERC20(want).allowance(address(this), address(cWant))
+            type(uint256).max - IERC20Upgradeable(want).allowance(address(this), address(cWant))
         );
-        IERC20(WFTM).safeIncreaseAllowance(
+        IERC20Upgradeable(WFTM).safeIncreaseAllowance(
             UNI_ROUTER,
-            type(uint256).max - IERC20(WFTM).allowance(address(this), UNI_ROUTER)
+            type(uint256).max - IERC20Upgradeable(WFTM).allowance(address(this), UNI_ROUTER)
         );
-        IERC20(SCREAM).safeIncreaseAllowance(
+        IERC20Upgradeable(SCREAM).safeIncreaseAllowance(
             UNI_ROUTER,
-            type(uint256).max - IERC20(SCREAM).allowance(address(this), UNI_ROUTER)
+            type(uint256).max - IERC20Upgradeable(SCREAM).allowance(address(this), UNI_ROUTER)
         );
     }
 
@@ -732,8 +742,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Removes all allowance that were given
      */
     function _removeAllowances() internal {
-        IERC20(want).safeDecreaseAllowance(address(cWant), IERC20(want).allowance(address(this), address(cWant)));
-        IERC20(WFTM).safeDecreaseAllowance(UNI_ROUTER, IERC20(WFTM).allowance(address(this), UNI_ROUTER));
-        IERC20(SCREAM).safeDecreaseAllowance(UNI_ROUTER, IERC20(SCREAM).allowance(address(this), UNI_ROUTER));
+        IERC20Upgradeable(want).safeDecreaseAllowance(address(cWant), IERC20Upgradeable(want).allowance(address(this), address(cWant)));
+        IERC20Upgradeable(WFTM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(WFTM).allowance(address(this), UNI_ROUTER));
+        IERC20Upgradeable(SCREAM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(SCREAM).allowance(address(this), UNI_ROUTER));
     }
 }

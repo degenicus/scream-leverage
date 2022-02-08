@@ -107,13 +107,13 @@ describe('Vaults', function () {
     console.log(`vault.address: ${vault.address}`);
     console.log(`treasury.address: ${treasury.address}`);
 
-    strategy = await Strategy.deploy(
-      vault.address,
-      [treasury.address, paymentSplitterAddress],
-      [strategistAddress],
-      scWantAddress,
-    );
     console.log('strategy');
+    strategy = await hre.upgrades.deployProxy(
+      Strategy,
+      [vault.address, [treasury.address, paymentSplitterAddress], [strategistAddress], scWantAddress],
+      { kind: 'uups' },
+    );
+    await strategy.deployed();
 
     await vault.initialize(strategy.address);
 
