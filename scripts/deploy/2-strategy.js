@@ -1,3 +1,5 @@
+const hre = require('hardhat');
+
 async function main() {
   const vaultAddress = '0xC2cE269f3646a5F5bF1cCDa73c6cAB50f64012b6';
 
@@ -11,13 +13,12 @@ async function main() {
   const scfUSDT = '0x02224765bc8d54c21bb51b0951c80315e1c263f9';
 
   // const options = { gasPrice: 2000000000000, gasLimit: 9000000 };
-  const strategy = await Strategy.deploy(
-    vaultAddress,
-    [treasuryAddress, paymentSplitterAddress],
-    [strategist1, strategist2, strategist3],
-    scfUSDT,
-  );
 
+  const strategy = await hre.upgrades.deployProxy(
+    Strategy,
+    [vaultAddress, [treasuryAddress, paymentSplitterAddress], [strategist1, strategist2, strategist3], scfUSDT],
+    { kind: 'uups' },
+  );
   await strategy.deployed();
   console.log('Strategy deployed to:', strategy.address);
 }
