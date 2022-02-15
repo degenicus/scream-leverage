@@ -183,6 +183,7 @@ describe('Vaults', function () {
       const allowedLTVDrift = toWantUnit('0.01');
       expect(ltv).to.be.closeTo(toWantUnit('0.73'), allowedLTVDrift);
     });
+
     xit('should trigger deleveraging on deposit when LTV is too high', async function () {
       const depositAmount = toWantUnit('100', true);
       await vault.connect(self).deposit(depositAmount);
@@ -198,6 +199,7 @@ describe('Vaults', function () {
       console.log(`ltvAfter: ${ltvAfter}`);
       expect(ltvAfter).to.be.closeTo(newLTV, allowedLTVDrift);
     });
+
     xit('should not change leverage when LTV is within the allowed drift on deposit', async function () {
       const depositAmount = toWantUnit('1', true);
       const ltv = toWantUnit('0.73');
@@ -212,6 +214,7 @@ describe('Vaults', function () {
       console.log(`ltvAfter: ${ltvAfter}`);
       expect(ltvAfter).to.be.closeTo(ltv, allowedLTVDrift);
     });
+
     xit('should mint user their pool share', async function () {
       console.log('---------------------------------------------');
       const userBalance = await want.balanceOf(selfAddress);
@@ -242,6 +245,7 @@ describe('Vaults', function () {
       expect(ownerWantBalance).to.be.closeTo(ownerDepositAmount, allowedImprecision);
       expect(selfWantBalance).to.equal(selfDepositAmount);
     });
+
     xit('should allow withdrawals', async function () {
       const userBalance = await want.balanceOf(selfAddress);
       console.log(`userBalance: ${userBalance}`);
@@ -263,6 +267,7 @@ describe('Vaults', function () {
       const isSmallBalanceDifference = expectedBalance.sub(userBalanceAfterWithdraw) < smallDifference;
       expect(isSmallBalanceDifference).to.equal(true);
     });
+
     xit('should trigger leveraging on withdraw when LTV is too low', async function () {
       const startingLTV = toWantUnit('0.6');
       await strategy.setTargetLtv(startingLTV);
@@ -290,6 +295,7 @@ describe('Vaults', function () {
 
       expect(userBalanceAfterWithdraw).to.be.closeTo(expectedBalance, toWantUnit('0.0000001', true));
     });
+
     xit('should trigger deleveraging on withdraw when LTV is too high', async function () {
       const startingLTV = toWantUnit('0.7');
       await strategy.setTargetLtv(startingLTV);
@@ -317,6 +323,7 @@ describe('Vaults', function () {
 
       expect(userBalanceAfterWithdraw).to.be.closeTo(expectedBalance, toWantUnit('0.0000001', true));
     });
+
     xit('should not change leverage on withdraw when still in the allowed LTV', async function () {
       const startingLTV = toWantUnit('0.7');
       await strategy.setTargetLtv(startingLTV);
@@ -343,6 +350,7 @@ describe('Vaults', function () {
 
       expect(userBalanceAfterWithdraw).to.be.closeTo(expectedBalance, toWantUnit('0.0000001', true));
     });
+
     xit('should allow small withdrawal', async function () {
       const userBalance = await want.balanceOf(selfAddress);
       console.log(`userBalance: ${userBalance}`);
@@ -367,6 +375,7 @@ describe('Vaults', function () {
       const isSmallBalanceDifference = expectedBalance.sub(userBalanceAfterWithdraw) < smallDifference;
       expect(isSmallBalanceDifference).to.equal(true);
     });
+
     xit('should handle small deposit + withdraw', async function () {
       const userBalance = await want.balanceOf(selfAddress);
       console.log(`userBalance: ${userBalance}`);
@@ -390,13 +399,15 @@ describe('Vaults', function () {
       console.log(`userBalanceAfterWithdraw: ${userBalanceAfterWithdraw}`);
       expect(isSmallBalanceDifference).to.equal(true);
     });
+
     xit('should be able to harvest', async function () {
       await vault.connect(self).deposit(toWantUnit(1000, true));
       const estimatedGas = await strategy.estimateGas.harvest();
       console.log(`estimatedGas: ${estimatedGas}`);
       await strategy.connect(self).harvest();
     });
-    it('should provide yield', async function () {
+
+    xit('should provide yield', async function () {
       const timeToSkip = 3600;
       const initialUserBalance = await want.balanceOf(selfAddress);
       const depositAmount = initialUserBalance.div(10);
@@ -428,6 +439,7 @@ describe('Vaults', function () {
       await strategy.unpause();
       await expect(vault.connect(self).deposit(depositAmount)).to.not.be.reverted;
     });
+
     xit('should be able to panic', async function () {
       const depositAmount = toWantUnit('0.05', true);
       await vault.connect(self).deposit(depositAmount);
@@ -441,6 +453,7 @@ describe('Vaults', function () {
       // Panic does not updateBalance so the reported balance is 2x
       expect(newVaultBalance.div(2)).to.be.closeTo(vaultBalance, allowedImprecision);
     });
+
     xit('should be able to retire strategy', async function () {
       const depositAmount = toWantUnit('.05', true);
       await vault.connect(self).deposit(depositAmount);
@@ -455,10 +468,12 @@ describe('Vaults', function () {
       expect(newVaultBalance).to.be.closeTo(vaultBalance, allowedImprecision);
       expect(newStrategyBalance).to.be.lt(allowedImprecision);
     });
+
     xit('should be able to retire strategy with no balance', async function () {
       // Test needs the require statement to be commented out during the test
       await expect(strategy.retireStrat()).to.not.be.reverted;
     });
+
     xit('should be able to estimate harvest', async function () {
       const whaleDepositAmount = toWantUnit('27171', true);
       await vault.connect(wantWhale).deposit(whaleDepositAmount);
@@ -476,12 +491,51 @@ describe('Vaults', function () {
       expect(hasProfit).to.equal(true);
       expect(hasCallFee).to.equal(true);
     });
+
     xit('should be able to estimate blocks until liquidation', async function () {
       const whaleDepositAmount = toWantUnit('27171', true);
       await vault.connect(wantWhale).deposit(whaleDepositAmount);
       const blocksUntilLiquidation = await strategy.getblocksUntilLiquidation();
       console.log(`blocksUntilLiquidation: ${blocksUntilLiquidation}`);
       expect(blocksUntilLiquidation.gt(0)).to.equal(true);
+    });
+
+    it('should not allow implementation upgrades before timelock has passed', async function () {
+      await strategy.initiateUpgradeCooldown();
+
+      const StrategyV2 = await ethers.getContractFactory('TestReaperAutoCompoundScreamLeverageV2');
+      await expect(hre.upgrades.upgradeProxy(strategy.address, StrategyV2)).to.be.revertedWith(
+        'cooldown not initiated or still active',
+      );
+    });
+
+    it('should allow implementation upgrades once timelock has passed', async function () {
+      const StrategyV2 = await ethers.getContractFactory('TestReaperAutoCompoundScreamLeverageV2');
+      const timeToSkip = (await strategy.UPGRADE_TIMELOCK()).add(10);
+      await strategy.initiateUpgradeCooldown();
+      await moveTimeForward(timeToSkip.toNumber());
+      await hre.upgrades.upgradeProxy(strategy.address, StrategyV2);
+    });
+
+    it('successive upgrades need to initiate timelock again', async function () {
+      const StrategyV2 = await ethers.getContractFactory('TestReaperAutoCompoundScreamLeverageV2');
+      const timeToSkip = (await strategy.UPGRADE_TIMELOCK()).add(10);
+      await strategy.initiateUpgradeCooldown();
+      await moveTimeForward(timeToSkip.toNumber());
+      await hre.upgrades.upgradeProxy(strategy.address, StrategyV2);
+
+      const StrategyV3 = await ethers.getContractFactory('TestReaperAutoCompoundScreamLeverageV3');
+      await expect(hre.upgrades.upgradeProxy(strategy.address, StrategyV3)).to.be.revertedWith(
+        'cooldown not initiated or still active',
+      );
+
+      await strategy.initiateUpgradeCooldown();
+      await expect(hre.upgrades.upgradeProxy(strategy.address, StrategyV3)).to.be.revertedWith(
+        'cooldown not initiated or still active',
+      );
+
+      await moveTimeForward(timeToSkip.toNumber());
+      await hre.upgrades.upgradeProxy(strategy.address, StrategyV3);
     });
   });
 });

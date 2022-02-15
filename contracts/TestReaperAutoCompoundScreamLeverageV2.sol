@@ -11,7 +11,7 @@ pragma solidity 0.8.11;
 /**
  * @dev This strategy will deposit and leverage a token on Scream to maximize yield by farming Scream tokens
  */
-contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
+contract TestReaperAutoCompoundScreamLeverageV2 is ReaperBaseStrategy {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
     uint256 public upgradeProposalTime;
@@ -86,7 +86,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         wftmToWantRoute = [WFTM, want];
         screamToWftmRoute = [SCREAM, WFTM];
 
-        targetLTV = 0.73 ether;
+        targetLTV = 0.70 ether;
         allowedLTVDrift = 0.01 ether;
         balanceOfPool = 0;
         borrowDepth = 12;

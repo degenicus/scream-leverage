@@ -17,6 +17,7 @@ abstract contract ReaperBaseStrategy is
 {
     uint256 public constant PERCENT_DIVISOR = 10_000;
     uint256 public constant ONE_YEAR = 365 days;
+    uint256 public constant UPGRADE_TIMELOCK = 1 hours; // minimum 48 hours for RF
 
     struct Harvest {
         uint256 timestamp;
@@ -293,12 +294,6 @@ abstract contract ReaperBaseStrategy is
 
         return -int256(yearlyUnsignedPercentageChange);
     }
-
-    /**
-     * @dev This function must be overriden simply for access control purposes.
-     *      Only DEFAULT_ADMIN_ROLE can upgrade the implementation.
-     */
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
     /**
      * @dev Returns the approx amount of profit from harvesting plus fee that
