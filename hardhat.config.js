@@ -3,6 +3,7 @@ require('@nomiclabs/hardhat-waffle');
 require('hardhat-gas-reporter');
 require('solidity-coverage');
 require('@openzeppelin/hardhat-upgrades');
+require('hardhat-contract-sizer');
 
 const { devAccount } = require('./secrets.json');
 
