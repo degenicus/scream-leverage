@@ -14,8 +14,6 @@ pragma solidity 0.8.11;
 contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     using SafeERC20Upgradeable for IERC20Upgradeable;
 
-    uint256 public upgradeProposalTime;
-
     /**
      * @dev Tokens Used:
      * {WFTM} - Required for liquidity routing when doing swaps. Also used to charge fees on yield.
@@ -105,7 +103,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * The available {want} minus fees is returned to the vault.
      */
     function withdraw(uint256 _withdrawAmount) external {
-        require(msg.sender == vault, '!vault');
+        require(msg.sender == vault);
 
         uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
 
@@ -162,8 +160,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function manualDeleverage(uint256 amount) external {
         _onlyStrategistOrOwner();
-        require(cWant.redeemUnderlying(amount) == 0, 'Scream returned an error');
-        require(cWant.repayBorrow(amount) == 0, 'Scream returned an error');
+        require(cWant.redeemUnderlying(amount) == 0);
+        require(cWant.repayBorrow(amount) == 0);
     }
 
     /**
@@ -171,7 +169,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function manualReleaseWant(uint256 amount) external {
         _onlyStrategistOrOwner();
-        require(cWant.redeemUnderlying(amount) == 0, 'Scream returned an error');
+        require(cWant.redeemUnderlying(amount) == 0);
     }
 
     /**
@@ -181,7 +179,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function setTargetLtv(uint256 _ltv) external {
         _onlyStrategistOrOwner();
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
-        require(collateralFactorMantissa > _ltv + allowedLTVDrift, 'Ltv above max level');
+        require(collateralFactorMantissa > _ltv + allowedLTVDrift);
         targetLTV = _ltv;
     }
 
@@ -192,7 +190,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function setAllowedLtvDrift(uint256 _drift) external {
         _onlyStrategistOrOwner();
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
-        require(collateralFactorMantissa > targetLTV + _drift, 'Ltv above max level');
+        require(collateralFactorMantissa > targetLTV + _drift);
         allowedLTVDrift = _drift;
     }
 
@@ -201,7 +199,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function setBorrowDepth(uint8 _borrowDepth) external {
         _onlyStrategistOrOwner();
-        require(_borrowDepth <= maxBorrowDepth, 'Above max borrow depth');
+        require(_borrowDepth <= maxBorrowDepth);
         borrowDepth = _borrowDepth;
     }
 
@@ -227,7 +225,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * vault, ready to be migrated to the new strat.
      */
     function retireStrat() external {
-        require(msg.sender == vault, '!vault');
+        require(msg.sender == vault);
         _claimRewards();
         _swapRewardsToWftm();
         _swapToWant();
@@ -260,24 +258,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _giveAllowances();
 
         deposit();
-    }
-
-    /**
-     * @dev DEFAULT_ADMIN_ROLE must call this function prior to upgrading the implementation
-     *      and wait UPGRADE_TIMELOCK seconds before executing the upgrade.
-     */
-    function initiateUpgradeCooldown() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        upgradeProposalTime = block.timestamp;
-    }
-
-    /**
-     * @dev This function is called:
-     *      - in initialize()
-     *      - as part of a successful upgrade
-     *      - manually by DEFAULT_ADMIN_ROLE to clear the upgrade cooldown.
-     */
-    function clearUpgradeCooldown() public onlyRole(DEFAULT_ADMIN_ROLE) {
-        upgradeProposalTime = block.timestamp + (ONE_YEAR * 100);
     }
 
     /**
@@ -765,15 +745,5 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         IERC20Upgradeable(want).safeDecreaseAllowance(address(cWant), IERC20Upgradeable(want).allowance(address(this), address(cWant)));
         IERC20Upgradeable(WFTM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(WFTM).allowance(address(this), UNI_ROUTER));
         IERC20Upgradeable(SCREAM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(SCREAM).allowance(address(this), UNI_ROUTER));
-    }
-
-    /**
-     * @dev This function must be overriden simply for access control purposes.
-     *      Only DEFAULT_ADMIN_ROLE can upgrade the implementation once the timelock
-     *      has passed.
-     */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(upgradeProposalTime + UPGRADE_TIMELOCK < block.timestamp, "cooldown not initiated or still active");
-        clearUpgradeCooldown();
     }
 }

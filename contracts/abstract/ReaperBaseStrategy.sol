@@ -85,6 +85,8 @@ abstract contract ReaperBaseStrategy is
     event StratHarvest(address indexed harvester);
     event StrategistRemitterUpdated(address newStrategistRemitter);
 
+    uint256 public upgradeProposalTime;
+
     /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() initializer {}
 
@@ -261,6 +263,24 @@ abstract contract ReaperBaseStrategy is
     }
 
     /**
+     * @dev DEFAULT_ADMIN_ROLE must call this function prior to upgrading the implementation
+     *      and wait UPGRADE_TIMELOCK seconds before executing the upgrade.
+     */
+    function initiateUpgradeCooldown() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        upgradeProposalTime = block.timestamp;
+    }
+
+    /**
+     * @dev This function is called:
+     *      - in initialize()
+     *      - as part of a successful upgrade
+     *      - manually by DEFAULT_ADMIN_ROLE to clear the upgrade cooldown.
+     */
+    function clearUpgradeCooldown() public onlyRole(DEFAULT_ADMIN_ROLE) {
+        upgradeProposalTime = block.timestamp + (ONE_YEAR * 100);
+    }
+
+    /**
      * @dev Only allow access to strategist or owner
      */
     function _onlyStrategistOrOwner() internal view {
@@ -308,4 +328,14 @@ abstract contract ReaperBaseStrategy is
      *      including charging any fees.
      */
     function _harvestCore() internal virtual;
+
+    /**
+     * @dev This function must be overriden simply for access control purposes.
+     *      Only DEFAULT_ADMIN_ROLE can upgrade the implementation once the timelock
+     *      has passed.
+     */
+    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(upgradeProposalTime + UPGRADE_TIMELOCK < block.timestamp, "cooldown not initiated or still active");
+        clearUpgradeCooldown();
+    }
 }
