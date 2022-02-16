@@ -84,7 +84,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         wftmToWantRoute = [WFTM, want];
         screamToWftmRoute = [SCREAM, WFTM];
 
-        targetLTV = 0.73 ether;
+        targetLTV = 0.63 ether;
         allowedLTVDrift = 0.01 ether;
         balanceOfPool = 0;
         borrowDepth = 12;
