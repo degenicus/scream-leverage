@@ -221,11 +221,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
     
     /**
-     * @dev Function that has to be called as part of strat migration. It sends all the available funds back to the
-     * vault, ready to be migrated to the new strat.
+     * @dev Function to retire the strategy. Claims all rewards and withdraws
+     *      all principal from external contracts, and sends everything back to
+     *      the vault. Can only be called by strategist or owner.
+     *
+     * Note: this is not an emergency withdraw function. For that, see panic().
      */
     function retireStrat() external {
-        require(msg.sender == vault);
+        _onlyStrategistOrOwner();
         _claimRewards();
         _swapRewardsToWftm();
         _swapToWant();

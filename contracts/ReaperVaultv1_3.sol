@@ -20,14 +20,6 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
-    struct StratCandidate {
-        address implementation;
-        uint256 proposedTime;
-    }
-
-    // The last proposed strategy to switch to.
-    StratCandidate public stratCandidate;
-    // The strategy currently in use by the vault.
     address public strategy;
 
     uint256 public depositFee;
@@ -43,8 +35,6 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
 
     // The token the vault accepts and looks to maximize.
     IERC20 public token;
-    // The minimum time it has to pass before a strat candidate can be approved.
-    uint256 public immutable approvalDelay;
 
     /**
      * + WEBSITE DISCLAIMER +
@@ -74,8 +64,6 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     mapping(address => uint256) public cumulativeDeposits;
     mapping(address => uint256) public cumulativeWithdrawals;
 
-    event NewStratCandidate(address implementation);
-    event UpgradeStrat(address implementation);
     event TermsAccepted(address user);
     event TvlCapUpdated(uint256 newTvlCap);
 
@@ -90,18 +78,17 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      * @param _token the token to maximize.
      * @param _name the name of the vault token.
      * @param _symbol the symbol of the vault token.
-     * @param _approvalDelay the delay before a new strat can be approved.
+     * @param _depositFee one-time fee taken from deposits to this vault (in basis points)
+     * @param _tvlCap initial deposit cap for scaling TVL safely
      */
     constructor(
         address _token,
         string memory _name,
         string memory _symbol,
-        uint256 _approvalDelay,
         uint256 _depositFee,
         uint256 _tvlCap
     ) ERC20(string(_name), string(_symbol)) {
         token = IERC20(_token);
-        approvalDelay = _approvalDelay;
         constructionTime = block.timestamp;
         depositFee = _depositFee;
         tvlCap = _tvlCap;
@@ -247,18 +234,6 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
         incrementWithdrawals(r);
     }
 
-    /**
-     * @dev Sets the candidate for the new strat to use with this vault.
-     * @param _implementation The address of the candidate strategy.
-     */
-    function proposeStrat(address _implementation) public onlyOwner {
-        stratCandidate = StratCandidate({
-            implementation: _implementation,
-            proposedTime: block.timestamp
-        });
-        emit NewStratCandidate(_implementation);
-    }
-
     function updateDepositFee(uint256 fee) public onlyOwner {
         depositFee = fee;
     }
@@ -276,32 +251,6 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      */
     function removeTvlCap() external onlyOwner {
         updateTvlCap(type(uint256).max);
-    }
-
-    /**
-     * @dev It switches the active strat for the strat candidate. After upgrading, the
-     * candidate implementation is set to the 0x00 address, and proposedTime to a time
-     * happening in +100 years for safety.
-     */
-
-    function upgradeStrat() public onlyOwner {
-        require(
-            stratCandidate.implementation != address(0),
-            "There is no candidate"
-        );
-        require(
-            stratCandidate.proposedTime.add(approvalDelay) < block.timestamp,
-            "Delay has not passed"
-        );
-
-        emit UpgradeStrat(stratCandidate.implementation);
-
-        IStrategy(strategy).retireStrat();
-        strategy = stratCandidate.implementation;
-        stratCandidate.implementation = address(0);
-        stratCandidate.proposedTime = 5000000000;
-
-        earn();
     }
 
     /*

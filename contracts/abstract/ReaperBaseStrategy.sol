@@ -107,6 +107,7 @@ abstract contract ReaperBaseStrategy is
         securityFee = 10;
 
         _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        clearUpgradeCooldown();
 
         vault = _vault;
         treasury = _feeRemitters[0];
