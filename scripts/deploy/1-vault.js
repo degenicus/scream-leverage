@@ -3,7 +3,7 @@ async function main() {
 
   //const usdcAddress = "0x04068da6c83afcfa0e13ba15a6696662335d5b75";
   //const fUSDTAddress = "0x049d68029688eabf473097a2fc38ef61633a3c7a";
-  const fraxAddress = '0xaf319e5789945197e365e7f7fbfc56b130523b33';
+  const fraxAddress = '0xdc301622e621166bd8e82f2ca0a26c13ad0be355';
   const tokenName = 'FRAX SCREAM Single Sided';
   const tokenSymbol = 'rf-scFRAX';
   const depositFee = 0;

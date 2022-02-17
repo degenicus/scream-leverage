@@ -11,7 +11,7 @@ async function main() {
   const strategist3 = '0x1A20D7A31e5B3Bc5f02c8A146EF6f394502a10c4';
   //const scUSDC = "0xE45Ac34E528907d0A0239ab5Db507688070B20bf";
   //const scfUSDT = '0x02224765bc8d54c21bb51b0951c80315e1c263f9';
-  const scFRAX = '0x383d965c8d2ac0a9c1f6930ad10943606bca4cb7';
+  const scFRAX = '0x4E6854EA84884330207fB557D1555961D85Fc17E';
 
   // const options = { gasPrice: 2000000000000, gasLimit: 9000000 };
 

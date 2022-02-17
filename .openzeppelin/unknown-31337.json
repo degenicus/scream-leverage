@@ -3,14 +3,14 @@
   "proxies": [
     {
       "address": "0x5081a39b8A5f0E35a8D959395a630b68B74Dd30f",
-      "txHash": "0x4f9f0c03c27ae13197c9acf110dbd38cc603e092033b578fb561a08c79b9e661",
+      "txHash": "0x883833d581ef3b110f146de56121da3820690e5fe09890b9c85e9208eb909dae",
       "kind": "uups"
     }
   ],
   "impls": {
     "4264de58f1b9b3b53a6cf6b2514cb3fe3f04c94ce2076c2e616944e6f159e696": {
       "address": "0x922D6956C99E12DFeB3224DEA977D0939758A1Fe",
-      "txHash": "0xd4102d16b7248289030fd0e3fc75f44c301e2e3523fef1bc16354a555ba8d2e2",
+      "txHash": "0x1f66755090146f4282df00ad730b85af5c1a75c4fbbc7b2ae7c428523573e0fe",
       "layout": {
         "storage": [
           {
@@ -88,7 +88,7 @@
           {
             "contract": "ReaperBaseStrategy",
             "label": "harvestLog",
-            "type": "t_array(t_struct(Harvest)7772_storage)dyn_storage",
+            "type": "t_array(t_struct(Harvest)7773_storage)dyn_storage",
             "src": "contracts\\abstract\\ReaperBaseStrategy.sol:27"
           },
           {
@@ -166,84 +166,84 @@
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "cWant",
-            "type": "t_contract(CErc20I)8629",
+            "type": "t_contract(CErc20I)8630",
             "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:27"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "comptroller",
-            "type": "t_contract(IComptroller)8975",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:37"
+            "type": "t_contract(IComptroller)8976",
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:35"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "screamToWftmRoute",
             "type": "t_array(t_address)dyn_storage",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:44"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:42"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "wftmToWantRoute",
             "type": "t_array(t_address)dyn_storage",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:45"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:43"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "markets",
             "type": "t_array(t_address)dyn_storage",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:52"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:50"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "targetLTV",
             "type": "t_uint256",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:63"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:61"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "allowedLTVDrift",
             "type": "t_uint256",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:64"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:62"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "balanceOfPool",
             "type": "t_uint256",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:65"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:63"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "borrowDepth",
             "type": "t_uint256",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:66"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:64"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "minWantToLeverage",
             "type": "t_uint256",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:67"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:65"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "maxBorrowDepth",
             "type": "t_uint256",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:68"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:66"
           },
           {
             "contract": "ReaperAutoCompoundScreamLeverage",
             "label": "minScreamToSell",
             "type": "t_uint256",
-            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:69"
+            "src": "contracts\\ReaperAutoCompoundScreamLeverage.sol:67"
           }
         ],
         "types": {
           "t_address": {
             "label": "address"
           },
-          "t_contract(CErc20I)8629": {
+          "t_contract(CErc20I)8630": {
             "label": "contract CErc20I"
           },
-          "t_contract(IComptroller)8975": {
+          "t_contract(IComptroller)8976": {
             "label": "contract IComptroller"
           },
           "t_array(t_address)dyn_storage": {
@@ -252,10 +252,10 @@
           "t_uint256": {
             "label": "uint256"
           },
-          "t_array(t_struct(Harvest)7772_storage)dyn_storage": {
+          "t_array(t_struct(Harvest)7773_storage)dyn_storage": {
             "label": "struct ReaperBaseStrategy.Harvest[]"
           },
-          "t_struct(Harvest)7772_storage": {
+          "t_struct(Harvest)7773_storage": {
             "label": "struct ReaperBaseStrategy.Harvest",
             "members": [
               {

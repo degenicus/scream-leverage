@@ -29,11 +29,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Third Party Contracts:
      * {SPOOKY_ROUTER} - SpookySwap router
-     * {SPIRIT_ROUTER} - SpiritSwap router
      * {comptroller} - Scream contract to enter market and to claim Scream tokens
      */
     address public constant SPOOKY_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
-    address public constant SPIRIT_ROUTER = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
     IComptroller public comptroller;
 
     /**
@@ -67,6 +65,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public minWantToLeverage;
     uint256 public maxBorrowDepth;
     uint256 public minScreamToSell;
+
+    /**
+     * {SPIRIT_ROUTER} - SpiritSwap router
+     */
+    address public constant SPIRIT_ROUTER = 0x16327E3FbDaCA3bcF7E38F5Af2599D2DDc33aE52;
 
     /**
      * @dev Initializes the strategy. Sets parameters, saves routes, and gives allowances.
