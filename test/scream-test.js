@@ -30,10 +30,12 @@ describe('Vaults', function () {
   // const FUSD = "0xad84341756bf337f5a0164515b1f6f993d194e1f";
   // const daiAddress = "0x8d11ec38a3eb5e956b052f67da8bdc9bef8abf3e";
   // const scDaiAddress = "0x8D9AED9882b4953a0c9fa920168fa1FDfA0eBE75";
-  const usdcAddress = '0x04068da6c83afcfa0e13ba15a6696662335d5b75';
-  const scUSDCAddress = '0xE45Ac34E528907d0A0239ab5Db507688070B20bf';
-  const wantAddress = usdcAddress;
-  const scWantAddress = scUSDCAddress;
+  // const usdcAddress = '0x04068da6c83afcfa0e13ba15a6696662335d5b75';
+  // const scUSDCAddress = '0xE45Ac34E528907d0A0239ab5Db507688070B20bf';
+  const fraxAddress = '0xdc301622e621166bd8e82f2ca0a26c13ad0be355';
+  const scFRAXAddress = '0x4e6854ea84884330207fb557d1555961d85fc17e';
+  const wantAddress = fraxAddress;
+  const scWantAddress = scFRAXAddress;
   let self;
   let wantWhale;
   let selfAddress;
@@ -48,7 +50,7 @@ describe('Vaults', function () {
         {
           forking: {
             jsonRpcUrl: 'https://rpc.ftm.tools/',
-            blockNumber: 28485212,
+            blockNumber: 31220919,
           },
         },
       ],
@@ -60,8 +62,10 @@ describe('Vaults', function () {
     // const wantWhaleAddress = "0x93c08a3168fc469f3fc165cd3a471d19a37ca19e"; // dai
     // const wantHolder = "0x3b7994f623a02617cf1053161d14dc881e1aa02c"; // fusd
     // const wantWhaleAddress = "0x8d7e07b1a346ac29e922ac01fa34cb2029f536b9"; // fusd
-    const wantHolder = '0xadbeb26c852bb3c41a59078a38ec562b155bb364'; // usdc
-    const wantWhaleAddress = '0x93c08a3168fc469f3fc165cd3a471d19a37ca19e'; // usdc
+    // const wantHolder = '0xadbeb26c852bb3c41a59078a38ec562b155bb364'; // usdc
+    // const wantWhaleAddress = '0x93c08a3168fc469f3fc165cd3a471d19a37ca19e'; // usdc
+    const wantHolder = '0xf6e2c94a609ca303964b65ec991a1a0d2991b961'; // frax
+    const wantWhaleAddress = '0x49f7f0cda5db90a086c68786b9c37c937446679f'; // frax
     const strategistAddress = '0x3b410908e71Ee04e7dE2a87f8F9003AFe6c1c7cE';
     await hre.network.provider.request({
       method: 'hardhat_impersonateAccount',
@@ -375,7 +379,7 @@ describe('Vaults', function () {
       expect(isSmallBalanceDifference).to.equal(true);
     });
 
-    it('should handle small deposit + withdraw', async function () {
+    xit('should handle small deposit + withdraw', async function () {
       const userBalance = await want.balanceOf(selfAddress);
       console.log(`userBalance: ${userBalance}`);
       // "0.0000000000001" for 1e18
@@ -406,9 +410,10 @@ describe('Vaults', function () {
       await strategy.connect(self).harvest();
     });
 
-    xit('should provide yield', async function () {
+    it('should provide yield', async function () {
       const timeToSkip = 3600;
       const initialUserBalance = await want.balanceOf(selfAddress);
+      console.log(initialUserBalance);
       const depositAmount = initialUserBalance.div(10);
 
       await vault.connect(self).deposit(depositAmount);
