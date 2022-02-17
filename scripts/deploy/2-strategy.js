@@ -1,7 +1,7 @@
 const hre = require('hardhat');
 
 async function main() {
-  const vaultAddress = '0x34ffdF13Daf7e4379F06e5cA6F0E7FDa558A9dd1';
+  const vaultAddress = '0xA9C97CA3fd524C09bd95b07d5F0E5d81614d8c8d';
 
   const Strategy = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
   const treasuryAddress = '0x0e7c5313E9BB80b654734d9b7aB1FB01468deE3b';
@@ -9,15 +9,13 @@ async function main() {
   const strategist1 = '0x1E71AEE6081f62053123140aacC7a06021D77348';
   const strategist2 = '0x81876677843D00a7D792E1617459aC2E93202576';
   const strategist3 = '0x1A20D7A31e5B3Bc5f02c8A146EF6f394502a10c4';
-  //const scUSDC = "0xE45Ac34E528907d0A0239ab5Db507688070B20bf";
-  //const scfUSDT = '0x02224765bc8d54c21bb51b0951c80315e1c263f9';
-  const scDOLA = '0x5A3B9Dcdd462f264eC1bD56D618BF4552C2EaF8A';
+  const scUSDC = '0xE45Ac34E528907d0A0239ab5Db507688070B20bf';
 
   // const options = { gasPrice: 2000000000000, gasLimit: 9000000 };
 
   const strategy = await hre.upgrades.deployProxy(
     Strategy,
-    [vaultAddress, [treasuryAddress, paymentSplitterAddress], [strategist1, strategist2, strategist3], scDOLA],
+    [vaultAddress, [treasuryAddress, paymentSplitterAddress], [strategist1, strategist2, strategist3], scUSDC],
     { kind: 'uups' },
   );
   await strategy.deployed();
