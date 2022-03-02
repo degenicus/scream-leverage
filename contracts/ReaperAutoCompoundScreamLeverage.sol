@@ -66,7 +66,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public minWantToLeverage;
     uint256 public maxBorrowDepth;
     uint256 public minScreamToSell;
-    uint256 public withdrawSlippageTolerance = 500;
+    uint256 public withdrawSlippageTolerance;
 
     /**
      * @dev Initializes the strategy. Sets parameters, saves routes, and gives allowances.
@@ -93,6 +93,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         minWantToLeverage = 1000;
         maxBorrowDepth = 15;
         minScreamToSell = 1000;
+        withdrawSlippageTolerance = 500;
 
         _giveAllowances();
 
@@ -245,6 +246,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 maxAmount = type(uint256).max;
         _deleverage(maxAmount);
         _withdrawUnderlyingToVault(maxAmount, false);
+        updateBalance();
     }
 
     /**
@@ -256,6 +258,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 maxAmount = type(uint256).max;
         _deleverage(maxAmount);
         _withdrawUnderlyingToVault(maxAmount, false);
+        updateBalance();
 
         pause();
     }
@@ -527,7 +530,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             _withdrawAmount = realSupplied;
         }
 
-        uint256 tempColla = targetLTV;
+        uint256 tempColla = targetLTV + allowedLTVDrift;
 
         uint256 reservedAmount = 0;
         if (tempColla == 0) {
