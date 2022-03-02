@@ -10,7 +10,7 @@ const { devAccount } = require('./secrets.json');
 module.exports = {
   networks: {
     opera: {
-      url: 'https://rpc.ftm.tools/',
+      url: 'https://late-wild-fire.fantom.quiknode.pro/',
       accounts: [devAccount],
     },
   },
