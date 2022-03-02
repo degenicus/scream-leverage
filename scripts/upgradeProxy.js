@@ -1,7 +1,8 @@
 async function main() {
-  const fUSDTProxy = '0x512A00B3BbC54BAeefcf2FbD82E082E04bc5dffd';
+  const dolaProxy = '0x3f831a885b3d032510BD29d30615dE6794fE9614';
   const stratFactory = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
-  const stratContract = await hre.upgrades.upgradeProxy(fUSDTProxy, stratFactory);
+  const options = { gasPrice: 1500000000000, gasLimit: 15000000, call: { fn: 'clearUpgradeCooldown' } };
+  const stratContract = await hre.upgrades.upgradeProxy(dolaProxy, stratFactory, options);
 }
 
 main()
