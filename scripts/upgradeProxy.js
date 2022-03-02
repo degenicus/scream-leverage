@@ -1,8 +1,49 @@
-async function main() {
-  //const fUSDTProxy = '0x512A00B3BbC54BAeefcf2FbD82E082E04bc5dffd';
-  const fraxProxy = '0x2a4a7B7AC87a416aE83772fEd196259A5fd47C63';
+const tusdProxy = '';
+const options = { gasPrice: 1000000000000 };
+const targetLTV = ethers.utils.parseEther('0.72');
+
+const getStrategy = async () => {
+  const Strategy = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
+  const strategy = Strategy.attach(tusdProxy);
+  return strategy;
+};
+
+const upgradeProxy = async () => {
   const stratFactory = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
-  const stratContract = await hre.upgrades.upgradeProxy(fraxProxy, stratFactory);
+  await hre.upgrades.upgradeProxy(tusdProxy, stratFactory, { ...options, timeout: 0 });
+  console.log('upgradeProxy');
+};
+
+const clearUpgradeCooldown = async () => {
+  const strategy = await getStrategy();
+  await strategy.clearUpgradeCooldown(options);
+  console.log('clearUpgradeCooldown');
+};
+
+const setSlippage = async () => {
+  const strategy = await getStrategy();
+  await strategy.setWithdrawSlippageTolerance(50, options);
+  console.log('setSlippage');
+};
+
+const unpause = async () => {
+  const strategy = await getStrategy();
+  await strategy.unpause(options);
+  console.log('unpause');
+};
+
+const setTargetLTV = async () => {
+  const strategy = await getStrategy();
+  await strategy.setTargetLtv(targetLTV, options);
+  console.log('setTargetLTV');
+};
+
+async function main() {
+  await upgradeProxy();
+  //await clearUpgradeCooldown();
+  //await setSlippage();
+  //await setTargetLTV();
+  //await unpause();
 }
 
 main()

@@ -541,5 +541,16 @@ describe('Vaults', function () {
       await moveTimeForward(timeToSkip.toNumber());
       await hre.upgrades.upgradeProxy(strategy.address, StrategyV3);
     });
+
+    it('should be able to set withdraw slippage tolerance', async function () {
+      const startingSlippageTolerance = await strategy.withdrawSlippageTolerance();
+      console.log(`slippageTolerance ${startingSlippageTolerance}`);
+
+      const newSlippage = 200;
+      await strategy.setWithdrawSlippageTolerance(newSlippage);
+
+      const endingSlippageTolerance = await strategy.withdrawSlippageTolerance();
+      expect(endingSlippageTolerance).to.equal(newSlippage);
+    });
   });
 });

@@ -57,6 +57,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * {balanceOfPool} - The total balance deposited into Scream (supplied - borrowed)
      * {borrowDepth} - The maximum amount of loops used to leverage and deleverage
      * {minWantToLeverage} - The minimum amount of want to leverage in a loop
+     * {withdrawSlippageTolerance} - Maximum slippage authorized when withdrawing
      */
     uint256 public targetLTV;
     uint256 public allowedLTVDrift;
@@ -65,6 +66,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public minWantToLeverage;
     uint256 public maxBorrowDepth;
     uint256 public minScreamToSell;
+    uint256 public withdrawSlippageTolerance;
 
     /**
      * {SPIRIT_ROUTER} - SpiritSwap router
@@ -96,6 +98,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         minWantToLeverage = 1000;
         maxBorrowDepth = 15;
         minScreamToSell = 1000;
+        withdrawSlippageTolerance = 500;
 
         _giveAllowances();
 
@@ -224,7 +227,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _onlyStrategistOrOwner();
         minWantToLeverage = _minWantToLeverage;
     }
-    
+
+    /**
+     * @dev Sets the maximum slippage authorized when withdrawing
+     */
+    function setWithdrawSlippageTolerance(uint256 _withdrawSlippageTolerance) external {
+        _onlyStrategistOrOwner();
+        withdrawSlippageTolerance = _withdrawSlippageTolerance;
+    }
     /**
      * @dev Function to retire the strategy. Claims all rewards and withdraws
      *      all principal from external contracts, and sends everything back to
@@ -241,6 +251,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 maxAmount = type(uint256).max;
         _deleverage(maxAmount);
         _withdrawUnderlyingToVault(maxAmount, false);
+        updateBalance();
     }
 
     /**
@@ -252,6 +263,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 maxAmount = type(uint256).max;
         _deleverage(maxAmount);
         _withdrawUnderlyingToVault(maxAmount, false);
+        updateBalance();
 
         pause();
     }
@@ -510,6 +522,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Withdraws want to the vault by redeeming the underlying
      */
     function _withdrawUnderlyingToVault(uint256 _withdrawAmount, bool _useWithdrawFee) internal {
+        uint256 initialWithdrawAmount = _withdrawAmount;
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
         uint256 realSupplied = supplied - borrowed;
@@ -522,7 +535,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             _withdrawAmount = realSupplied;
         }
 
-        uint256 tempColla = targetLTV;
+        uint256 tempColla = targetLTV + allowedLTVDrift;
 
         uint256 reservedAmount = 0;
         if (tempColla == 0) {
@@ -547,6 +560,15 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             withdrawAmount = _withdrawAmount - withdrawFee - 1;
         } else {
             withdrawAmount = _withdrawAmount - 1;
+        }
+
+        if(withdrawAmount < initialWithdrawAmount) {
+            require(
+                withdrawAmount >=
+                    (initialWithdrawAmount *
+                        (PERCENT_DIVISOR - withdrawSlippageTolerance)) /
+                        PERCENT_DIVISOR
+            );
         }
 
         CErc20I(cWant).redeemUnderlying(withdrawAmount);
