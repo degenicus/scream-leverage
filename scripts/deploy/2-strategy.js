@@ -1,7 +1,7 @@
 const hre = require('hardhat');
 
 async function main() {
-  const vaultAddress = '0xC2cE269f3646a5F5bF1cCDa73c6cAB50f64012b6';
+  const vaultAddress = '0xE56998F7C797577b44B067e6f3F2f3eBD34c3b16';
 
   const Strategy = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
   const treasuryAddress = '0x0e7c5313E9BB80b654734d9b7aB1FB01468deE3b';
@@ -12,12 +12,10 @@ async function main() {
   //const scUSDC = "0xE45Ac34E528907d0A0239ab5Db507688070B20bf";
   const scfUSDT = '0x02224765bc8d54c21bb51b0951c80315e1c263f9';
 
-  // const options = { gasPrice: 2000000000000, gasLimit: 9000000 };
-
   const strategy = await hre.upgrades.deployProxy(
     Strategy,
     [vaultAddress, [treasuryAddress, paymentSplitterAddress], [strategist1, strategist2, strategist3], scfUSDT],
-    { kind: 'uups' },
+    { kind: 'uups', timeout: 0, gasPrice: 700000000000, gasLimit: 9000000 },
   );
   await strategy.deployed();
   console.log('Strategy deployed to:', strategy.address);
