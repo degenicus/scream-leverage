@@ -322,36 +322,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
-     * @dev Calculates how many blocks until we are in liquidation based on current interest rates
-     * WARNING does not include compounding so the estimate becomes more innacurate the further ahead we look
-     * Compound doesn't include compounding for most blocks
-     * Equation: ((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
-     */
-    function getblocksUntilLiquidation() public view returns (uint256) {
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
-
-        (uint256 supplied, uint256 borrowed) = getCurrentPosition();
-
-        uint256 borrrowRate = cWant.borrowRatePerBlock();
-
-        uint256 supplyRate = cWant.supplyRatePerBlock();
-
-        uint256 collateralisedDeposit = (supplied * collateralFactorMantissa) / MANTISSA;
-
-        uint256 borrowCost = borrowed * borrrowRate;
-        uint256 supplyGain = collateralisedDeposit * supplyRate;
-
-        if (supplyGain >= borrowCost) {
-            return type(uint256).max;
-        } else {
-            uint256 netSupplied = collateralisedDeposit - borrowed;
-            uint256 totalCost = borrowCost - supplyGain;
-            //minus 1 for this block
-            return (netSupplied * MANTISSA) / totalCost;
-        }
-    }
-
-    /**
      * @dev Returns the current position in Scream. Does not accrue interest
      * so might not be accurate, but the cWant is usually updated.
      */
