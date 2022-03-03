@@ -86,14 +86,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         wftmToWantRoute = [WFTM, want];
         screamToWftmRoute = [SCREAM, WFTM];
 
-        targetLTV = 0.73 ether;
+        targetLTV = 0.72 ether;
         allowedLTVDrift = 0.01 ether;
         balanceOfPool = 0;
         borrowDepth = 12;
         minWantToLeverage = 1000;
         maxBorrowDepth = 15;
         minScreamToSell = 1000;
-        withdrawSlippageTolerance = 500;
+        withdrawSlippageTolerance = 50;
 
         _giveAllowances();
 
