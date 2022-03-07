@@ -695,16 +695,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Charges fees based on the amount of WFTM gained from reward
      */
     function _chargeFees() internal {
-        uint256 wftmFee = (IERC20Upgradeable(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
+        IERC20Upgradeable wftm = IERC20Upgradeable(WFTM);
+        uint256 wftmFee = (wftm.balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
         if (wftmFee != 0) {
             uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
             uint256 treasuryFeeToVault = (wftmFee * treasuryFee) / PERCENT_DIVISOR;
             uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) / PERCENT_DIVISOR;
             treasuryFeeToVault -= feeToStrategist;
 
-            IERC20Upgradeable(WFTM).safeTransfer(msg.sender, callFeeToUser);
-            IERC20Upgradeable(WFTM).safeTransfer(treasury, treasuryFeeToVault);
-            IERC20Upgradeable(WFTM).safeTransfer(strategistRemitter, feeToStrategist);
+            wftm.safeTransfer(msg.sender, callFeeToUser);
+            wftm.safeTransfer(treasury, treasuryFeeToVault);
+            wftm.safeTransfer(strategistRemitter, feeToStrategist);
         }
     }
 
