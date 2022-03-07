@@ -65,7 +65,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public borrowDepth;
     uint256 public minWantToLeverage;
     uint256 public maxBorrowDepth;
-    uint256 public minScreamToSell;
     uint256 public withdrawSlippageTolerance;
 
     /**
@@ -92,7 +91,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         borrowDepth = 12;
         minWantToLeverage = 1000;
         maxBorrowDepth = 15;
-        minScreamToSell = 1000;
         withdrawSlippageTolerance = 50;
 
         _giveAllowances();
@@ -204,14 +202,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _onlyStrategistOrOwner();
         require(_borrowDepth <= maxBorrowDepth);
         borrowDepth = _borrowDepth;
-    }
-
-    /**
-     * @dev Sets the minimum reward the will be sold (too little causes revert from Uniswap)
-     */
-    function setMinScreamToSell(uint256 _minScreamToSell) external {
-        _onlyStrategistOrOwner();
-        minScreamToSell = _minScreamToSell;
     }
 
 
@@ -684,14 +674,19 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function _swapRewardsToWftm() internal {
         uint256 screamBalance = IERC20Upgradeable(SCREAM).balanceOf(address(this));
-        if (screamBalance >= minScreamToSell) {
-            IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                screamBalance,
-                0,
-                screamToWftmRoute,
-                address(this),
-                block.timestamp + 600
-            );
+        if (screamBalance != 0) {
+            IUniswapRouter router = IUniswapRouter(UNI_ROUTER);
+
+            uint256 wftmOutput = router.getAmountsOut(screamBalance, screamToWftmRoute)[1];
+            if (wftmOutput != 0) {
+                router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                    screamBalance,
+                    0,
+                    screamToWftmRoute,
+                    address(this),
+                    block.timestamp + 600
+                );
+            }
         }
     }
 
