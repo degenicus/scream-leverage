@@ -106,7 +106,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function withdraw(uint256 _withdrawAmount) external {
         require(msg.sender == vault);
 
-        uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
+        uint256 _ltv = _calculateLTV(_withdrawAmount);
 
         if (_shouldLeverage(_ltv)) {
             // Strategy is underleveraged so can withdraw underlying directly
@@ -281,7 +281,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function deposit() public whenNotPaused {
         CErc20I(cWant).mint(balanceOfWant());
-        uint256 _ltv = _calculateLTV();
+        uint256 _ltv = _calculateLTV(0);
 
         if (_shouldLeverage(_ltv)) {
             _leverMax();
@@ -477,22 +477,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     /**
      * @dev This is the state changing calculation of LTV that is more accurate
-     * to be used internally.
+     * to be used internally. It returns what the LTV will be after withdrawing
+     * {_withdrawAmount}, which may be 0--in which case we get the current LTV.
      */
-    function _calculateLTV() internal returns (uint256 ltv) {
-        uint256 supplied = cWant.balanceOfUnderlying(address(this));
-        uint256 borrowed = cWant.borrowBalanceStored(address(this));
-
-        if (supplied == 0 || borrowed == 0) {
-            return 0;
-        }
-        ltv = (MANTISSA * borrowed) / supplied;
-    }
-
-    /**
-     * @dev Calculates what the LTV will be after withdrawing
-     */
-    function _calculateLTVAfterWithdraw(uint256 _withdrawAmount) internal returns (uint256 ltv) {
+    function _calculateLTV(uint256 _withdrawAmount) internal returns (uint256 ltv) {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
         supplied = supplied - _withdrawAmount;
@@ -500,7 +488,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if (supplied == 0 || borrowed == 0) {
             return 0;
         }
-        ltv = (uint256(1e18) * borrowed) / supplied;
+        ltv = (MANTISSA * borrowed) / supplied;
     }
 
     /**
