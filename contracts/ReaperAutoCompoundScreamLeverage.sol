@@ -239,7 +239,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function retireStrat() external {
         _onlyStrategistOrOwner();
-        _claimRewards();
+        comptroller.claimComp(address(this));
         _swapRewardsToWftm();
         _swapToWant();
 
@@ -671,22 +671,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * 5. Deposits.
      */
     function _harvestCore() internal override {
-        _claimRewards();
+        comptroller.claimComp(address(this));
         _swapRewardsToWftm();
         _chargeFees();
         _swapToWant();
         deposit();
-    }
-
-    /**
-     * @dev Core harvest function.
-     * Get rewards from markets entered
-     */
-    function _claimRewards() internal {
-        CTokenI[] memory tokens = new CTokenI[](1);
-        tokens[0] = cWant;
-
-        comptroller.claimComp(address(this), tokens);
     }
 
     /**
