@@ -106,13 +106,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function withdraw(uint256 _withdrawAmount) external {
         require(msg.sender == vault);
 
-        uint256 _ltv = _calculateLTV(_withdrawAmount);
+        uint256 ltv = _calculateLTV(_withdrawAmount);
 
-        if (_shouldLeverage(_ltv)) {
+        if (ltv < targetLTV - allowedLTVDrift) {
             // Strategy is underleveraged so can withdraw underlying directly
             _withdrawUnderlyingToVault(_withdrawAmount, true);
             _leverMax();
-        } else if (_shouldDeleverage(_ltv)) {
+        } else if (ltv > targetLTV + allowedLTVDrift) {
             _deleverage(_withdrawAmount);
 
             // Strategy has deleveraged to the point where it can withdraw underlying
@@ -281,11 +281,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function deposit() public whenNotPaused {
         CErc20I(cWant).mint(balanceOfWant());
-        uint256 _ltv = _calculateLTV(0);
+        uint256 ltv = _calculateLTV(0);
 
-        if (_shouldLeverage(_ltv)) {
+        if (ltv < targetLTV - allowedLTVDrift) {
             _leverMax();
-        } else if (_shouldDeleverage(_ltv)) {
+        } else if (ltv > targetLTV + allowedLTVDrift) {
             _deleverage(0);
         }
         updateBalance();
@@ -453,26 +453,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal pure returns (uint256) {
         return ((wantSupplied * collateralFactor) / (MANTISSA - collateralFactor));
-    }
-
-    /**
-     * @dev Returns if the strategy should leverage with the given ltv level
-     */
-    function _shouldLeverage(uint256 _ltv) internal view returns (bool) {
-        if (_ltv < targetLTV - allowedLTVDrift) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * @dev Returns if the strategy should deleverage with the given ltv level
-     */
-    function _shouldDeleverage(uint256 _ltv) internal view returns (bool) {
-        if (_ltv > targetLTV + allowedLTVDrift) {
-            return true;
-        }
-        return false;
     }
 
     /**
