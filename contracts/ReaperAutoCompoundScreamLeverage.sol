@@ -471,16 +471,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             _withdrawAmount = realSupplied;
         }
 
-        uint256 tempColla = targetLTV + allowedLTVDrift;
-
-        uint256 reservedAmount = 0;
-        if (tempColla == 0) {
-            tempColla = 1e15; // 0.001 * 1e18. lower we have issues
-        }
-
-        reservedAmount = (borrowed * MANTISSA) / tempColla;
-        if (supplied >= reservedAmount) {
-            uint256 redeemable = supplied - reservedAmount;
+        uint256 minAllowedSupply = (borrowed * MANTISSA) / (targetLTV + allowedLTVDrift);
+        if (supplied >= minAllowedSupply) {
+            uint256 redeemable = supplied - minAllowedSupply;
             uint256 balance = cWant.balanceOf(address(this));
             if (balance > 1) {
                 if (redeemable < _withdrawAmount) {
@@ -489,26 +482,24 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             }
         }
 
-        uint256 withdrawAmount;
-
         if (_useWithdrawFee) {
             uint256 withdrawFee = (_withdrawAmount * securityFee) / PERCENT_DIVISOR;
-            withdrawAmount = _withdrawAmount - withdrawFee - 1;
+            _withdrawAmount -= (withdrawFee + 1);
         } else {
-            withdrawAmount = _withdrawAmount - 1;
+            _withdrawAmount -= 1;
         }
 
-        if(withdrawAmount < initialWithdrawAmount) {
+        if(_withdrawAmount < initialWithdrawAmount) {
             require(
-                withdrawAmount >=
+                _withdrawAmount >=
                     (initialWithdrawAmount *
                         (PERCENT_DIVISOR - withdrawSlippageTolerance)) /
                         PERCENT_DIVISOR
             );
         }
 
-        CErc20I(cWant).redeemUnderlying(withdrawAmount);
-        IERC20Upgradeable(want).safeTransfer(vault, withdrawAmount);
+        CErc20I(cWant).redeemUnderlying(_withdrawAmount);
+        IERC20Upgradeable(want).safeTransfer(vault, _withdrawAmount);
     }
 
     /**
