@@ -410,7 +410,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
 
         uint256 realSupply = supplied - borrowed;
-        uint256 newBorrow = _getMaxBorrowFromSupplied(realSupply, targetLTV);
+        uint256 newBorrow = (realSupply * targetLTV) / (MANTISSA - targetLTV);
         uint256 totalAmountToBorrow = newBorrow - borrowed;
 
         for (uint8 i = 0; i < borrowDepth && totalAmountToBorrow > minWantToLeverage; i++) {
@@ -446,13 +446,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         }
 
         return _withdrawAmount;
-    }
-
-    /**
-     * @dev Gets the maximum amount allowed to be borrowed for a given collateral factor and amount supplied
-     */
-    function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal pure returns (uint256) {
-        return ((wantSupplied * collateralFactor) / (MANTISSA - collateralFactor));
     }
 
     /**
