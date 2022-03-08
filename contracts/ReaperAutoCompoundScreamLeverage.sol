@@ -65,7 +65,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     uint256 public borrowDepth;
     uint256 public minWantToLeverage;
     uint256 public maxBorrowDepth;
-    uint256 public minScreamToSell;
     uint256 public withdrawSlippageTolerance;
 
     /**
@@ -92,7 +91,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         borrowDepth = 12;
         minWantToLeverage = 1000;
         maxBorrowDepth = 15;
-        minScreamToSell = 1000;
         withdrawSlippageTolerance = 50;
 
         _giveAllowances();
@@ -105,16 +103,16 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It withdraws {want} from Scream
      * The available {want} minus fees is returned to the vault.
      */
-    function withdraw(uint256 _withdrawAmount) external {
+    function withdraw(uint256 _withdrawAmount) external doUpdateBalance {
         require(msg.sender == vault);
 
-        uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
+        uint256 ltv = _calculateLTV(_withdrawAmount);
 
-        if (_shouldLeverage(_ltv)) {
+        if (ltv < targetLTV - allowedLTVDrift) {
             // Strategy is underleveraged so can withdraw underlying directly
             _withdrawUnderlyingToVault(_withdrawAmount, true);
             _leverMax();
-        } else if (_shouldDeleverage(_ltv)) {
+        } else if (ltv > targetLTV + allowedLTVDrift) {
             _deleverage(_withdrawAmount);
 
             // Strategy has deleveraged to the point where it can withdraw underlying
@@ -123,7 +121,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
             _withdrawUnderlyingToVault(_withdrawAmount, true);
         }
-        updateBalance();
     }
 
     /**
@@ -206,14 +203,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         borrowDepth = _borrowDepth;
     }
 
-    /**
-     * @dev Sets the minimum reward the will be sold (too little causes revert from Uniswap)
-     */
-    function setMinScreamToSell(uint256 _minScreamToSell) external {
-        _onlyStrategistOrOwner();
-        minScreamToSell = _minScreamToSell;
-    }
-
 
     /**
      * @dev Sets the minimum want to leverage/deleverage (loop) for
@@ -237,29 +226,22 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      *
      * Note: this is not an emergency withdraw function. For that, see panic().
      */
-    function retireStrat() external {
+    function retireStrat() external doUpdateBalance {
         _onlyStrategistOrOwner();
-        _claimRewards();
+        comptroller.claimComp(address(this));
         _swapRewardsToWftm();
         _swapToWant();
 
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
-        updateBalance();
+        _deleverage(type(uint256).max);
+        _withdrawUnderlyingToVault(type(uint256).max, false);
     }
 
     /**
      * @dev Pauses supplied. Withdraws all funds from Scream, leaving rewards behind.
      */
-    function panic() external {
+    function panic() external doUpdateBalance {
         _onlyStrategistOrOwner();
-
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
-        updateBalance();
-
+        _deleverage(type(uint256).max);
         pause();
     }
 
@@ -269,9 +251,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function unpause() external {
         _onlyStrategistOrOwner();
         _unpause();
-
         _giveAllowances();
-
         deposit();
     }
 
@@ -289,16 +269,15 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It gets called whenever someone supplied in the strategy's vault contract.
      * It supplies {want} Scream to farm {SCREAM}
      */
-    function deposit() public whenNotPaused {
+    function deposit() public whenNotPaused doUpdateBalance {
         CErc20I(cWant).mint(balanceOfWant());
-        uint256 _ltv = _calculateLTV();
+        uint256 ltv = _calculateLTV(0);
 
-        if (_shouldLeverage(_ltv)) {
+        if (ltv < targetLTV - allowedLTVDrift) {
             _leverMax();
-        } else if (_shouldDeleverage(_ltv)) {
+        } else if (ltv > targetLTV + allowedLTVDrift) {
             _deleverage(0);
         }
-        updateBalance();
     }
 
     /**
@@ -420,19 +399,19 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
 
         uint256 realSupply = supplied - borrowed;
-        uint256 newBorrow = _getMaxBorrowFromSupplied(realSupply, targetLTV);
-        uint256 totalAmountToBorrow = newBorrow - borrowed;
+        uint256 newBorrow = (realSupply * targetLTV) / (MANTISSA - targetLTV);
+        uint256 amountLeftToBorrow = newBorrow - borrowed;
 
-        for (uint8 i = 0; i < borrowDepth && totalAmountToBorrow > minWantToLeverage; i++) {
-            totalAmountToBorrow = totalAmountToBorrow - _leverUpStep(totalAmountToBorrow);
+        for (uint256 i = 0; i < borrowDepth && amountLeftToBorrow > minWantToLeverage; i++) {
+            amountLeftToBorrow -= _leverUpStep(amountLeftToBorrow);
         }
     }
 
     /**
      * @dev Does one step of leveraging
      */
-    function _leverUpStep(uint256 _withdrawAmount) internal returns (uint256) {
-        if (_withdrawAmount == 0) {
+    function _leverUpStep(uint256 _borrowAmount) internal returns (uint256) {
+        if (_borrowAmount == 0) {
             return 0;
         }
 
@@ -443,66 +422,27 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         canBorrow -= borrowed;
 
-        if (canBorrow < _withdrawAmount) {
-            _withdrawAmount = canBorrow;
+        if (canBorrow < _borrowAmount) {
+            _borrowAmount = canBorrow;
         }
 
-        if (_withdrawAmount > 10) {
+        if (_borrowAmount > 10) {
             // borrow available amount
-            CErc20I(cWant).borrow(_withdrawAmount);
+            CErc20I(cWant).borrow(_borrowAmount);
 
             // deposit available want as collateral
             CErc20I(cWant).mint(balanceOfWant());
         }
 
-        return _withdrawAmount;
-    }
-
-    /**
-     * @dev Gets the maximum amount allowed to be borrowed for a given collateral factor and amount supplied
-     */
-    function _getMaxBorrowFromSupplied(uint256 wantSupplied, uint256 collateralFactor) internal pure returns (uint256) {
-        return ((wantSupplied * collateralFactor) / (MANTISSA - collateralFactor));
-    }
-
-    /**
-     * @dev Returns if the strategy should leverage with the given ltv level
-     */
-    function _shouldLeverage(uint256 _ltv) internal view returns (bool) {
-        if (_ltv < targetLTV - allowedLTVDrift) {
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * @dev Returns if the strategy should deleverage with the given ltv level
-     */
-    function _shouldDeleverage(uint256 _ltv) internal view returns (bool) {
-        if (_ltv > targetLTV + allowedLTVDrift) {
-            return true;
-        }
-        return false;
+        return _borrowAmount;
     }
 
     /**
      * @dev This is the state changing calculation of LTV that is more accurate
-     * to be used internally.
+     * to be used internally. It returns what the LTV will be after withdrawing
+     * {_withdrawAmount}, which may be 0--in which case we get the current LTV.
      */
-    function _calculateLTV() internal returns (uint256 ltv) {
-        uint256 supplied = cWant.balanceOfUnderlying(address(this));
-        uint256 borrowed = cWant.borrowBalanceStored(address(this));
-
-        if (supplied == 0 || borrowed == 0) {
-            return 0;
-        }
-        ltv = (MANTISSA * borrowed) / supplied;
-    }
-
-    /**
-     * @dev Calculates what the LTV will be after withdrawing
-     */
-    function _calculateLTVAfterWithdraw(uint256 _withdrawAmount) internal returns (uint256 ltv) {
+    function _calculateLTV(uint256 _withdrawAmount) internal returns (uint256 ltv) {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
         supplied = supplied - _withdrawAmount;
@@ -510,7 +450,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if (supplied == 0 || borrowed == 0) {
             return 0;
         }
-        ltv = (uint256(1e18) * borrowed) / supplied;
+        ltv = (MANTISSA * borrowed) / supplied;
     }
 
     /**
@@ -530,16 +470,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             _withdrawAmount = realSupplied;
         }
 
-        uint256 tempColla = targetLTV + allowedLTVDrift;
-
-        uint256 reservedAmount = 0;
-        if (tempColla == 0) {
-            tempColla = 1e15; // 0.001 * 1e18. lower we have issues
-        }
-
-        reservedAmount = (borrowed * MANTISSA) / tempColla;
-        if (supplied >= reservedAmount) {
-            uint256 redeemable = supplied - reservedAmount;
+        uint256 minAllowedSupply = (borrowed * MANTISSA) / (targetLTV + allowedLTVDrift);
+        if (supplied >= minAllowedSupply) {
+            uint256 redeemable = supplied - minAllowedSupply;
             uint256 balance = cWant.balanceOf(address(this));
             if (balance > 1) {
                 if (redeemable < _withdrawAmount) {
@@ -548,61 +481,48 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             }
         }
 
-        uint256 withdrawAmount;
-
         if (_useWithdrawFee) {
             uint256 withdrawFee = (_withdrawAmount * securityFee) / PERCENT_DIVISOR;
-            withdrawAmount = _withdrawAmount - withdrawFee - 1;
+            _withdrawAmount -= (withdrawFee + 1);
         } else {
-            withdrawAmount = _withdrawAmount - 1;
+            _withdrawAmount -= 1;
         }
 
-        if(withdrawAmount < initialWithdrawAmount) {
+        if(_withdrawAmount < initialWithdrawAmount) {
             require(
-                withdrawAmount >=
+                _withdrawAmount >=
                     (initialWithdrawAmount *
                         (PERCENT_DIVISOR - withdrawSlippageTolerance)) /
                         PERCENT_DIVISOR
             );
         }
 
-        CErc20I(cWant).redeemUnderlying(withdrawAmount);
-        IERC20Upgradeable(want).safeTransfer(vault, withdrawAmount);
+        CErc20I(cWant).redeemUnderlying(_withdrawAmount);
+        IERC20Upgradeable(want).safeTransfer(vault, _withdrawAmount);
     }
 
     /**
-     * @dev For a given withdraw amount, figures out the new borrow with the current supply
-     * that will maintain the target LTV
+     * @dev For a given withdraw amount, figures out how much we need to reduce borrow by to
+     * maintain LTV at targerLTV.
      */
-    function _getDesiredBorrow(uint256 _withdrawAmount) internal returns (uint256 position) {
-        //we want to use statechanging for safety
+    function _getBorrowDifference(uint256 _withdrawAmount) internal returns (uint256 difference) {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
+        uint256 realSupply = supplied - borrowed;
 
-        //When we unwind we end up with the difference between borrow and supply
-        uint256 unwoundSupplied = supplied - borrowed;
-
-        //we want to see how close to collateral target we are.
-        //So we take our unwound supplied and add or remove the _withdrawAmount we are are adding/removing.
-        //This gives us our desired future undwoundDeposit (desired supply)
-
-        uint256 desiredSupply = 0;
-        if (_withdrawAmount > unwoundSupplied) {
-            _withdrawAmount = unwoundSupplied;
+        if (_withdrawAmount > realSupply) {
+            _withdrawAmount = realSupply;
         }
-        desiredSupply = unwoundSupplied - _withdrawAmount;
+        uint256 desiredSupply = realSupply - _withdrawAmount;
 
         //(ds *c)/(1-c)
-        uint256 num = desiredSupply * targetLTV;
-        uint256 den = MANTISSA - targetLTV;
-
-        uint256 desiredBorrow = num / den;
+        uint256 desiredBorrow = (desiredSupply * targetLTV) / (MANTISSA - targetLTV);
         if (desiredBorrow > 1e5) {
             //stop us going right up to the wire
             desiredBorrow = desiredBorrow - 1e5;
         }
 
-        position = borrowed - desiredBorrow;
+        difference = borrowed - desiredBorrow;
     }
 
     /**
@@ -610,53 +530,40 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * that will maintain the target LTV
      */
     function _deleverage(uint256 _withdrawAmount) internal {
-        uint256 newBorrow = _getDesiredBorrow(_withdrawAmount);
+        uint256 borrowDifference = _getBorrowDifference(_withdrawAmount);
 
-        // //If there is no deficit we dont need to adjust position
-        // //if the position change is tiny do nothing
-        if (newBorrow > minWantToLeverage) {
-            uint256 i = 0;
-            while (newBorrow > minWantToLeverage + 100) {
-                newBorrow = newBorrow - _leverDownStep(newBorrow);
-                i++;
-                //A limit set so we don't run out of gas
-                if (i >= borrowDepth) {
-                    break;
-                }
-            }
+        for (uint256 i = 0; i < borrowDepth && borrowDifference > minWantToLeverage; i++) {
+            borrowDifference -= _leverDownStep(borrowDifference);
         }
     }
 
     /**
      * @dev Deleverages one step
      */
-    function _leverDownStep(uint256 maxDeleverage) internal returns (uint256 deleveragedAmount) {
-        uint256 minAllowedSupply = 0;
+    function _leverDownStep(uint256 _releaseAmount) internal returns (uint256 deleveragedAmount) {
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
 
-        //collat ration should never be 0. if it is something is very wrong... but just incase
-        if (collateralFactorMantissa != 0) {
-            minAllowedSupply = (borrowed * MANTISSA) / collateralFactorMantissa;
-        }
+        uint256 minAllowedSupply = (borrowed * MANTISSA) / collateralFactorMantissa;
         uint256 maxAllowedDeleverageAmount = supplied - minAllowedSupply;
 
         deleveragedAmount = maxAllowedDeleverageAmount;
 
-        if (deleveragedAmount >= borrowed) {
+        if (deleveragedAmount > borrowed) {
             deleveragedAmount = borrowed;
         }
-        if (deleveragedAmount >= maxDeleverage) {
-            deleveragedAmount = maxDeleverage;
+        if (deleveragedAmount > _releaseAmount) {
+            deleveragedAmount = _releaseAmount;
         }
+
         uint256 exchangeRateStored = cWant.exchangeRateStored();
         //redeemTokens = redeemAmountIn * 1e18 / exchangeRate. must be more than 0
         //a rounding error means we need another small addition
         if (deleveragedAmount * MANTISSA >= exchangeRateStored && deleveragedAmount > 10) {
             deleveragedAmount -= 10; // Amount can be slightly off for tokens with less decimals (USDC), so redeem a bit less
             cWant.redeemUnderlying(deleveragedAmount);
-            //our borrow has been increased by no more than maxDeleverage
+            //our borrow has been increased by no more than _releaseAmount
             cWant.repayBorrow(deleveragedAmount);
         }
     }
@@ -671,7 +578,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * 5. Deposits.
      */
     function _harvestCore() internal override {
-        _claimRewards();
+        comptroller.claimComp(address(this));
         _swapRewardsToWftm();
         _chargeFees();
         _swapToWant();
@@ -680,29 +587,23 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     /**
      * @dev Core harvest function.
-     * Get rewards from markets entered
-     */
-    function _claimRewards() internal {
-        CTokenI[] memory tokens = new CTokenI[](1);
-        tokens[0] = cWant;
-
-        comptroller.claimComp(address(this), tokens);
-    }
-
-    /**
-     * @dev Core harvest function.
      * Swaps {SCREAM} to {WFTM}
      */
     function _swapRewardsToWftm() internal {
         uint256 screamBalance = IERC20Upgradeable(SCREAM).balanceOf(address(this));
-        if (screamBalance >= minScreamToSell) {
-            IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
-                screamBalance,
-                0,
-                screamToWftmRoute,
-                address(this),
-                block.timestamp + 600
-            );
+        if (screamBalance != 0) {
+            IUniswapRouter router = IUniswapRouter(UNI_ROUTER);
+
+            uint256 wftmOutput = router.getAmountsOut(screamBalance, screamToWftmRoute)[1];
+            if (wftmOutput != 0) {
+                router.swapExactTokensForTokensSupportingFeeOnTransferTokens(
+                    screamBalance,
+                    0,
+                    screamToWftmRoute,
+                    address(this),
+                    block.timestamp + 600
+                );
+            }
         }
     }
 
@@ -711,16 +612,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Charges fees based on the amount of WFTM gained from reward
      */
     function _chargeFees() internal {
-        uint256 wftmFee = (IERC20Upgradeable(WFTM).balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
+        IERC20Upgradeable wftm = IERC20Upgradeable(WFTM);
+        uint256 wftmFee = (wftm.balanceOf(address(this)) * totalFee) / PERCENT_DIVISOR;
         if (wftmFee != 0) {
             uint256 callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
             uint256 treasuryFeeToVault = (wftmFee * treasuryFee) / PERCENT_DIVISOR;
             uint256 feeToStrategist = (treasuryFeeToVault * strategistFee) / PERCENT_DIVISOR;
             treasuryFeeToVault -= feeToStrategist;
 
-            IERC20Upgradeable(WFTM).safeTransfer(msg.sender, callFeeToUser);
-            IERC20Upgradeable(WFTM).safeTransfer(treasury, treasuryFeeToVault);
-            IERC20Upgradeable(WFTM).safeTransfer(strategistRemitter, feeToStrategist);
+            wftm.safeTransfer(msg.sender, callFeeToUser);
+            wftm.safeTransfer(treasury, treasuryFeeToVault);
+            wftm.safeTransfer(strategistRemitter, feeToStrategist);
         }
     }
 
@@ -770,5 +672,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         IERC20Upgradeable(want).safeDecreaseAllowance(address(cWant), IERC20Upgradeable(want).allowance(address(this), address(cWant)));
         IERC20Upgradeable(WFTM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(WFTM).allowance(address(this), UNI_ROUTER));
         IERC20Upgradeable(SCREAM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(SCREAM).allowance(address(this), UNI_ROUTER));
+    }
+
+    modifier doUpdateBalance {
+        _;
+        updateBalance();
     }
 }
