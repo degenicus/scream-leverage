@@ -103,7 +103,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It withdraws {want} from Scream
      * The available {want} minus fees is returned to the vault.
      */
-    function withdraw(uint256 _withdrawAmount) external {
+    function withdraw(uint256 _withdrawAmount) external doUpdateBalance {
         require(msg.sender == vault);
 
         uint256 ltv = _calculateLTV(_withdrawAmount);
@@ -121,7 +121,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
             _withdrawUnderlyingToVault(_withdrawAmount, true);
         }
-        updateBalance();
     }
 
     /**
