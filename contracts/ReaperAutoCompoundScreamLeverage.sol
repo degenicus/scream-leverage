@@ -411,10 +411,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         uint256 realSupply = supplied - borrowed;
         uint256 newBorrow = (realSupply * targetLTV) / (MANTISSA - targetLTV);
-        uint256 totalAmountToBorrow = newBorrow - borrowed;
+        uint256 amountLeftToBorrow = newBorrow - borrowed;
 
-        for (uint8 i = 0; i < borrowDepth && totalAmountToBorrow > minWantToLeverage; i++) {
-            totalAmountToBorrow = totalAmountToBorrow - _leverUpStep(totalAmountToBorrow);
+        for (uint256 i = 0; i < borrowDepth && amountLeftToBorrow > minWantToLeverage; i++) {
+            amountLeftToBorrow -= _leverUpStep(amountLeftToBorrow);
         }
     }
 
