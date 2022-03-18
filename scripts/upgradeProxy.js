@@ -1,16 +1,16 @@
-const tusdProxy = '';
-const options = { gasPrice: 1000000000000 };
+const wftmProxy = '0xDcCf355BCeB10607856847733b1055b47af4A751';
+const options = { gasPrice: 300000000000 };
 const targetLTV = ethers.utils.parseEther('0.72');
 
 const getStrategy = async () => {
   const Strategy = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
-  const strategy = Strategy.attach(tusdProxy);
+  const strategy = Strategy.attach(wftmProxy);
   return strategy;
 };
 
 const upgradeProxy = async () => {
   const stratFactory = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
-  await hre.upgrades.upgradeProxy(tusdProxy, stratFactory, { ...options, timeout: 0 });
+  await hre.upgrades.upgradeProxy(wftmProxy, stratFactory, { ...options, timeout: 0 });
   console.log('upgradeProxy');
 };
 
@@ -39,10 +39,10 @@ const setTargetLTV = async () => {
 };
 
 async function main() {
-  await upgradeProxy();
+  //await upgradeProxy();
   //await clearUpgradeCooldown();
   //await setSlippage();
-  //await setTargetLTV();
+  await setTargetLTV();
   //await unpause();
 }
 
