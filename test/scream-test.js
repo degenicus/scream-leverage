@@ -453,7 +453,7 @@ describe('Vaults', function () {
     });
 
     it('should be able to retire strategy', async function () {
-      const depositAmount = toWantUnit('.05', true);
+      const depositAmount = toWantUnit('500', true);
       await vault.connect(self).deposit(depositAmount);
       const vaultBalance = await vault.balance();
       const strategyBalance = await strategy.balanceOf();

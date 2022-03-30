@@ -160,7 +160,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Emergency function to deleverage in case regular deleveraging breaks
      */
-    function manualDeleverage(uint256 amount) external {
+    function manualDeleverage(uint256 amount) external doUpdateBalance {
         _onlyStrategistOrOwner();
         require(cWant.redeemUnderlying(amount) == 0);
         require(cWant.repayBorrow(amount) == 0);
@@ -169,7 +169,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Emergency function to deleverage in case regular deleveraging breaks
      */
-    function manualReleaseWant(uint256 amount) external {
+    function manualReleaseWant(uint256 amount) external doUpdateBalance {
         _onlyStrategistOrOwner();
         require(cWant.redeemUnderlying(amount) == 0);
     }
@@ -229,6 +229,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _onlyStrategistOrOwner();
         withdrawSlippageTolerance = _withdrawSlippageTolerance;
     }
+
     /**
      * @dev Function to retire the strategy. Claims all rewards and withdraws
      *      all principal from external contracts, and sends everything back to
@@ -242,9 +243,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _swapRewardsToWftm();
         _swapToWant();
 
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
+        _deleverage(type(uint256).max);
+        _withdrawUnderlyingToVault(balanceOfPool, false);
     }
 
     /**
