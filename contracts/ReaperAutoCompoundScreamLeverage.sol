@@ -105,7 +105,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It withdraws {want} from Scream
      * The available {want} minus fees is returned to the vault.
      */
-    function withdraw(uint256 _withdrawAmount) external {
+    function withdraw(uint256 _withdrawAmount) external doUpdateBalance {
         require(msg.sender == vault);
 
         uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
@@ -123,7 +123,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
             _withdrawUnderlyingToVault(_withdrawAmount, true);
         }
-        updateBalance();
     }
 
     /**
@@ -237,7 +236,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      *
      * Note: this is not an emergency withdraw function. For that, see panic().
      */
-    function retireStrat() external {
+    function retireStrat() external doUpdateBalance {
         _onlyStrategistOrOwner();
         _claimRewards();
         _swapRewardsToWftm();
@@ -246,19 +245,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         uint256 maxAmount = type(uint256).max;
         _deleverage(maxAmount);
         _withdrawUnderlyingToVault(maxAmount, false);
-        updateBalance();
     }
 
     /**
      * @dev Pauses supplied. Withdraws all funds from Scream, leaving rewards behind.
      */
-    function panic() external {
+    function panic() external doUpdateBalance {
         _onlyStrategistOrOwner();
 
         uint256 maxAmount = type(uint256).max;
         _deleverage(maxAmount);
         _withdrawUnderlyingToVault(maxAmount, false);
-        updateBalance();
 
         pause();
     }
@@ -289,7 +286,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It gets called whenever someone supplied in the strategy's vault contract.
      * It supplies {want} Scream to farm {SCREAM}
      */
-    function deposit() public whenNotPaused {
+    function deposit() public whenNotPaused doUpdateBalance {
         CErc20I(cWant).mint(balanceOfWant());
         uint256 _ltv = _calculateLTV();
 
@@ -298,7 +295,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         } else if (_shouldDeleverage(_ltv)) {
             _deleverage(0);
         }
-        updateBalance();
     }
 
     /**
@@ -770,5 +766,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         IERC20Upgradeable(want).safeDecreaseAllowance(address(cWant), IERC20Upgradeable(want).allowance(address(this), address(cWant)));
         IERC20Upgradeable(WFTM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(WFTM).allowance(address(this), UNI_ROUTER));
         IERC20Upgradeable(SCREAM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(SCREAM).allowance(address(this), UNI_ROUTER));
+    }
+
+    /**
+     * @dev Helper modifier for functions that need to update the internal balance at the end of their execution.
+     */
+    modifier doUpdateBalance {
+        _;
+        updateBalance();
     }
 }
