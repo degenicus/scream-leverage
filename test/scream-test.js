@@ -449,8 +449,7 @@ describe('Vaults', function () {
       const newVaultBalance = await vault.balance();
       // 1e18 "0.000000001"
       const allowedImprecision = toWantUnit('0.0000001', true);
-      // Panic does not updateBalance so the reported balance is 2x
-      expect(newVaultBalance.div(2)).to.be.closeTo(vaultBalance, allowedImprecision);
+      expect(newVaultBalance).to.be.closeTo(vaultBalance, allowedImprecision);
     });
 
     it('should be able to retire strategy', async function () {

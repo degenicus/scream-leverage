@@ -252,11 +252,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function panic() external doUpdateBalance {
         _onlyStrategistOrOwner();
-
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
-
+        _deleverage(type(uint256).max);
         pause();
     }
 
