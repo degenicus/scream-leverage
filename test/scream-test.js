@@ -48,7 +48,7 @@ describe('Vaults', function () {
         {
           forking: {
             jsonRpcUrl: 'https://rpc.ftm.tools/',
-            blockNumber: 28485212,
+            blockNumber: 34485212,
           },
         },
       ],
@@ -183,14 +183,14 @@ describe('Vaults', function () {
       expect(ltv).to.be.closeTo(toWantUnit('0.73'), allowedLTVDrift);
     });
 
-    xit('should trigger deleveraging on deposit when LTV is too high', async function () {
+    it('should trigger deleveraging on deposit when LTV is too high', async function () {
       const depositAmount = toWantUnit('100', true);
       await vault.connect(self).deposit(depositAmount);
       const ltvBefore = await strategy.calculateLTV();
       console.log(`ltvBefore: ${ltvBefore}`);
-      const allowedLTVDrift = toWantUnit('0.01');
+      const allowedLTVDrift = toWantUnit('0.015');
       expect(ltvBefore).to.be.closeTo(toWantUnit('0.73'), allowedLTVDrift);
-      const newLTV = toWantUnit('0.6');
+      const newLTV = toWantUnit('0');
       await strategy.setTargetLtv(newLTV);
       const smallDepositAmount = toWantUnit('1', true);
       await vault.connect(self).deposit(smallDepositAmount);

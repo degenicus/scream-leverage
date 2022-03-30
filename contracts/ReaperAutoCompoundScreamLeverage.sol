@@ -469,7 +469,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Returns if the strategy should leverage with the given ltv level
      */
     function _shouldLeverage(uint256 _ltv) internal view returns (bool) {
-        if (_ltv < targetLTV - allowedLTVDrift) {
+        if (targetLTV >= allowedLTVDrift && _ltv < targetLTV - allowedLTVDrift) {
             return true;
         }
         return false;
