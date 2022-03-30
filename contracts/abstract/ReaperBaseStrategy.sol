@@ -142,37 +142,6 @@ abstract contract ReaperBaseStrategy is
     }
 
     /**
-     * @dev Returns a slice of the harvest log containing the _n latest harvests.
-     */
-    function latestHarvestLogSlice(uint256 _n) external view returns (Harvest[] memory slice) {
-        slice = new Harvest[](_n);
-        uint256 sliceCounter = 0;
-
-        for (uint256 i = harvestLog.length - _n; i < harvestLog.length; i++) {
-            slice[sliceCounter++] = harvestLog[i];
-        }
-    }
-
-    /**
-     * @dev Traverses the harvest log backwards until it hits _timestamp,
-     *      and returns the average APR calculated across all the included
-     *      log entries. APR is multiplied by PERCENT_DIVISOR to retain precision.
-     */
-    function averageAPRSince(uint256 _timestamp) external view returns (int256) {
-        require(harvestLog.length >= 2, "need at least 2 log entries");
-
-        int256 runningAPRSum;
-        int256 numLogsProcessed;
-
-        for (uint256 i = harvestLog.length - 1; i > 0 && harvestLog[i].timestamp >= _timestamp; i--) {
-            runningAPRSum += calculateAPRUsingLogs(i - 1, i);
-            numLogsProcessed++;
-        }
-
-        return runningAPRSum / numLogsProcessed;
-    }
-
-    /**
      * @dev Traverses the harvest log backwards _n items,
      *      and returns the average APR calculated across all the included
      *      log entries. APR is multiplied by PERCENT_DIVISOR to retain precision.

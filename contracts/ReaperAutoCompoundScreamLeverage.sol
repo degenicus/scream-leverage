@@ -231,6 +231,17 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     }
 
     /**
+     * @dev Sets the swap path to go from {WFTM} to {want}.
+     */
+    function setWftmToWantRoute(address[] calldata _newWftmToWantRoute) external {
+        _onlyStrategistOrOwner();
+        require(_newWftmToWantRoute[0] == WFTM, "bad route");
+        require(_newWftmToWantRoute[_newWftmToWantRoute.length - 1] == want, "bad route");
+        delete wftmToWantRoute;
+        wftmToWantRoute = _newWftmToWantRoute;
+    }
+
+    /**
      * @dev Function to retire the strategy. Claims all rewards and withdraws
      *      all principal from external contracts, and sends everything back to
      *      the vault. Can only be called by strategist or owner.
