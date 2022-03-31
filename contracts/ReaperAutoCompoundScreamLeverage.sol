@@ -46,9 +46,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Scream variables
      * {markets} - Contains the Scream tokens to farm, used to enter markets and claim Scream
      * {MANTISSA} - The unit used by the Compound protocol
+     * {LTV_SAFETY_ZONE} - We will only go up to 98% of max allowed LTV for {targetLTV}
      */
     address[] public markets;
     uint256 public constant MANTISSA = 1e18;
+    uint256 public constant LTV_SAFETY_ZONE = 0.98 ether;
 
     /**
      * @dev Strategy variables
@@ -179,9 +181,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Should be in units of 1e18
      */
     function setTargetLtv(uint256 _ltv) external {
-        _onlyStrategistOrOwner();
+        if (!hasRole(KEEPER, msg.sender)) {
+            _onlyStrategistOrOwner();
+        }
+
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
         require(collateralFactorMantissa > _ltv + allowedLTVDrift);
+        require(_ltv <= collateralFactorMantissa * LTV_SAFETY_ZONE / MANTISSA);
         targetLTV = _ltv;
     }
 
@@ -317,36 +323,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function balanceOfWant() public view returns (uint256) {
         return IERC20Upgradeable(want).balanceOf(address(this));
-    }
-
-    /**
-     * @dev Calculates how many blocks until we are in liquidation based on current interest rates
-     * WARNING does not include compounding so the estimate becomes more innacurate the further ahead we look
-     * Compound doesn't include compounding for most blocks
-     * Equation: ((supplied*colateralThreshold - borrowed) / (borrowed*borrowrate - supplied*colateralThreshold*interestrate));
-     */
-    function getblocksUntilLiquidation() public view returns (uint256) {
-        (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
-
-        (uint256 supplied, uint256 borrowed) = getCurrentPosition();
-
-        uint256 borrrowRate = cWant.borrowRatePerBlock();
-
-        uint256 supplyRate = cWant.supplyRatePerBlock();
-
-        uint256 collateralisedDeposit = (supplied * collateralFactorMantissa) / MANTISSA;
-
-        uint256 borrowCost = borrowed * borrrowRate;
-        uint256 supplyGain = collateralisedDeposit * supplyRate;
-
-        if (supplyGain >= borrowCost) {
-            return type(uint256).max;
-        } else {
-            uint256 netSupplied = collateralisedDeposit - borrowed;
-            uint256 totalCost = borrowCost - supplyGain;
-            //minus 1 for this block
-            return (netSupplied * MANTISSA) / totalCost;
-        }
     }
 
     /**

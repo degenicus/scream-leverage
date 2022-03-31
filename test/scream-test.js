@@ -305,7 +305,7 @@ describe('Vaults', function () {
       console.log(`ltvBefore: ${ltvBefore}`);
       const allowedLTVDrift = toWantUnit('0.01');
       expect(ltvBefore).to.be.closeTo(startingLTV, allowedLTVDrift);
-      const newLTV = toWantUnit('0.6');
+      const newLTV = toWantUnit('0');
       await strategy.setTargetLtv(newLTV);
       const smallWithdrawAmount = toWantUnit('1', true);
       const userBalance = await want.balanceOf(selfAddress);
@@ -488,14 +488,6 @@ describe('Vaults', function () {
       const hasCallFee = callFeeToUser.gt(0);
       expect(hasProfit).to.equal(true);
       expect(hasCallFee).to.equal(true);
-    });
-
-    it('should be able to estimate blocks until liquidation', async function () {
-      const whaleDepositAmount = toWantUnit('27171', true);
-      await vault.connect(wantWhale).deposit(whaleDepositAmount);
-      const blocksUntilLiquidation = await strategy.getblocksUntilLiquidation();
-      console.log(`blocksUntilLiquidation: ${blocksUntilLiquidation}`);
-      expect(blocksUntilLiquidation.gt(0)).to.equal(true);
     });
 
     xit('should not allow implementation upgrades before timelock has passed', async function () {

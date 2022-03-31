@@ -33,6 +33,7 @@ abstract contract ReaperBaseStrategy is
      */
     bytes32 public constant STRATEGIST = keccak256("STRATEGIST");
     bytes32 public constant STRATEGIST_MULTISIG = keccak256("STRATEGIST_MULTISIG");
+    bytes32 public constant KEEPER = keccak256("KEEPER");
 
     /**
      * @dev Reaper contracts:
