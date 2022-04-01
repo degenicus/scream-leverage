@@ -46,9 +46,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Scream variables
      * {markets} - Contains the Scream tokens to farm, used to enter markets and claim Scream
      * {MANTISSA} - The unit used by the Compound protocol
+     * {LTV_SAFETY_ZONE} - We will only go up to 98% of max allowed LTV for {targetLTV}
      */
     address[] public markets;
     uint256 public constant MANTISSA = 1e18;
+    uint256 public constant LTV_SAFETY_ZONE = 0.98 ether;
 
     /**
      * @dev Strategy variables
@@ -91,14 +93,14 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         wftmToWantRoute = [WFTM, want];
         screamToWftmRoute = [SCREAM, WFTM];
 
-        targetLTV = 0.73 ether;
+        targetLTV = 0.72 ether;
         allowedLTVDrift = 0.01 ether;
         balanceOfPool = 0;
         borrowDepth = 12;
         minWantToLeverage = 1000;
         maxBorrowDepth = 15;
         minScreamToSell = 1000;
-        withdrawSlippageTolerance = 500;
+        withdrawSlippageTolerance = 50;
 
         _giveAllowances();
 
@@ -110,7 +112,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It withdraws {want} from Scream
      * The available {want} minus fees is returned to the vault.
      */
-    function withdraw(uint256 _withdrawAmount) external {
+    function withdraw(uint256 _withdrawAmount) external doUpdateBalance {
         require(msg.sender == vault);
 
         uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
@@ -128,7 +130,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
             _withdrawUnderlyingToVault(_withdrawAmount, true);
         }
-        updateBalance();
     }
 
     /**
@@ -166,7 +167,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Emergency function to deleverage in case regular deleveraging breaks
      */
-    function manualDeleverage(uint256 amount) external {
+    function manualDeleverage(uint256 amount) external doUpdateBalance {
         _onlyStrategistOrOwner();
         require(cWant.redeemUnderlying(amount) == 0);
         require(cWant.repayBorrow(amount) == 0);
@@ -175,7 +176,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Emergency function to deleverage in case regular deleveraging breaks
      */
-    function manualReleaseWant(uint256 amount) external {
+    function manualReleaseWant(uint256 amount) external doUpdateBalance {
         _onlyStrategistOrOwner();
         require(cWant.redeemUnderlying(amount) == 0);
     }
@@ -185,9 +186,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * Should be in units of 1e18
      */
     function setTargetLtv(uint256 _ltv) external {
-        _onlyStrategistOrOwner();
+        if (!hasRole(KEEPER, msg.sender)) {
+            _onlyStrategistOrOwner();
+        }
+
         (, uint256 collateralFactorMantissa, ) = comptroller.markets(address(cWant));
         require(collateralFactorMantissa > _ltv + allowedLTVDrift);
+        require(_ltv <= collateralFactorMantissa * LTV_SAFETY_ZONE / MANTISSA);
         targetLTV = _ltv;
     }
 
@@ -235,6 +240,18 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _onlyStrategistOrOwner();
         withdrawSlippageTolerance = _withdrawSlippageTolerance;
     }
+
+    /**
+     * @dev Sets the swap path to go from {WFTM} to {want}.
+     */
+    function setWftmToWantRoute(address[] calldata _newWftmToWantRoute) external {
+        _onlyStrategistOrOwner();
+        require(_newWftmToWantRoute[0] == WFTM, "bad route");
+        require(_newWftmToWantRoute[_newWftmToWantRoute.length - 1] == want, "bad route");
+        delete wftmToWantRoute;
+        wftmToWantRoute = _newWftmToWantRoute;
+    }
+
     /**
      * @dev Function to retire the strategy. Claims all rewards and withdraws
      *      all principal from external contracts, and sends everything back to
@@ -242,29 +259,22 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      *
      * Note: this is not an emergency withdraw function. For that, see panic().
      */
-    function retireStrat() external {
+    function retireStrat() external doUpdateBalance {
         _onlyStrategistOrOwner();
         _claimRewards();
         _swapRewardsToWftm();
         _swapToWant();
 
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
-        updateBalance();
+        _deleverage(type(uint256).max);
+        _withdrawUnderlyingToVault(balanceOfPool, false);
     }
 
     /**
      * @dev Pauses supplied. Withdraws all funds from Scream, leaving rewards behind.
      */
-    function panic() external {
+    function panic() external doUpdateBalance {
         _onlyStrategistOrOwner();
-
-        uint256 maxAmount = type(uint256).max;
-        _deleverage(maxAmount);
-        _withdrawUnderlyingToVault(maxAmount, false);
-        updateBalance();
-
+        _deleverage(type(uint256).max);
         pause();
     }
 
@@ -294,7 +304,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It gets called whenever someone supplied in the strategy's vault contract.
      * It supplies {want} Scream to farm {SCREAM}
      */
-    function deposit() public whenNotPaused {
+    function deposit() public whenNotPaused doUpdateBalance {
         CErc20I(cWant).mint(balanceOfWant());
         uint256 _ltv = _calculateLTV();
 
@@ -303,7 +313,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         } else if (_shouldDeleverage(_ltv)) {
             _deleverage(0);
         }
-        updateBalance();
     }
 
     /**
@@ -444,7 +453,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * @dev Returns if the strategy should leverage with the given ltv level
      */
     function _shouldLeverage(uint256 _ltv) internal view returns (bool) {
-        if (_ltv < targetLTV - allowedLTVDrift) {
+        if (targetLTV >= allowedLTVDrift && _ltv < targetLTV - allowedLTVDrift) {
             return true;
         }
         return false;
@@ -745,5 +754,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         IERC20Upgradeable(want).safeDecreaseAllowance(address(cWant), IERC20Upgradeable(want).allowance(address(this), address(cWant)));
         IERC20Upgradeable(WFTM).safeDecreaseAllowance(SPIRIT_ROUTER, IERC20Upgradeable(WFTM).allowance(address(this), SPIRIT_ROUTER));
         IERC20Upgradeable(SCREAM).safeDecreaseAllowance(SPOOKY_ROUTER, IERC20Upgradeable(SCREAM).allowance(address(this), SPOOKY_ROUTER));
+    }
+
+    /**
+     * @dev Helper modifier for functions that need to update the internal balance at the end of their execution.
+     */
+    modifier doUpdateBalance {
+        _;
+        updateBalance();
     }
 }
