@@ -1,6 +1,12 @@
-const tusdProxy = '';
+const tusdProxy = '0x175D6eF56e2F5335D5d8f37C5c580CA438f83e9f';
 const options = { gasPrice: 1000000000000 };
-const targetLTV = ethers.utils.parseEther('0.72');
+
+const getVault = async () => {
+  const vaultAddress = '0xbD81110596651c1B00B6A7d9D93e8831E227Eae9';
+  const Vault = await ethers.getContractFactory('ReaperVaultv1_3');
+  const vault = Vault.attach(vaultAddress);
+  return vault;
+};
 
 const getStrategy = async () => {
   const Strategy = await ethers.getContractFactory('ReaperAutoCompoundScreamLeverage');
@@ -34,16 +40,23 @@ const unpause = async () => {
 
 const setTargetLTV = async () => {
   const strategy = await getStrategy();
-  await strategy.setTargetLtv(targetLTV, options);
+  await strategy.setTargetLtv(ethers.utils.parseEther('0.72', options));
   console.log('setTargetLTV');
 };
 
+const earn = async () => {
+  const vault = await getVault(options);
+  await vault.earn();
+  console.log('earn');
+};
+
 async function main() {
-  await upgradeProxy();
+  //await upgradeProxy();
   //await clearUpgradeCooldown();
   //await setSlippage();
   //await setTargetLTV();
   //await unpause();
+  await earn();
 }
 
 main()
