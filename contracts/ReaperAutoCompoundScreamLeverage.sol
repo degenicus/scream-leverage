@@ -24,7 +24,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     address public constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant SCREAM = 0xe0654C8e6fd4D733349ac7E09f6f23DA256bF475;
-    address public want;
+    address public constant want = 0x846e4d51d7e2043c1a87e0ab7490b93fb940357b;
     CErc20I public cWant;
 
     /**
@@ -80,17 +80,13 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function initialize(
         address _vault,
         address[] memory _feeRemitters,
-        address[] memory _strategists,
-        address _scWant
+        address[] memory _strategists
     ) public initializer {
         __ReaperBaseStrategy_init(_vault, _feeRemitters, _strategists);
-        cWant = CErc20I(_scWant);
-        markets = [_scWant];
-        comptroller = IComptroller(cWant.comptroller());
-        want = cWant.underlying();
+        
         wftmToWantRoute = [WFTM, want];
         screamToWftmRoute = [SCREAM, WFTM];
-
+        
         targetLTV = 0.72 ether;
         allowedLTVDrift = 0.01 ether;
         balanceOfPool = 0;
@@ -99,10 +95,6 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         maxBorrowDepth = 15;
         minScreamToSell = 1000;
         withdrawSlippageTolerance = 50;
-
-        _giveAllowances();
-
-        comptroller.enterMarkets(markets);
     }
 
     /**
@@ -112,6 +104,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function withdraw(uint256 _withdrawAmount) external doUpdateBalance {
         require(msg.sender == vault);
+
+        if (address(cWant) == address(0)) {
+            IERC20Upgradeable(want).safeTransfer(vault, _withdrawAmount);
+            return;
+        }
 
         uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
 
@@ -250,6 +247,20 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         wftmToWantRoute = _newWftmToWantRoute;
     }
 
+    function delayedInitialize(address _scWant) external {
+        _onlyStrategistOrOwner();
+        // Only do this once
+        if (address(cWant) == address(0)) {
+            cWant = CErc20I(_scWant);
+            markets = [_scWant];
+            comptroller = IComptroller(cWant.comptroller());
+        
+            _giveAllowances();
+
+            comptroller.enterMarkets(markets);
+        }
+    }
+
     /**
      * @dev Function to retire the strategy. Claims all rewards and withdraws
      *      all principal from external contracts, and sends everything back to
@@ -303,6 +314,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      * It supplies {want} Scream to farm {SCREAM}
      */
     function deposit() public whenNotPaused doUpdateBalance {
+        if (address(cWant) == address(0)) {
+            return;
+        }
         CErc20I(cWant).mint(balanceOfWant());
         uint256 _ltv = _calculateLTV();
 
