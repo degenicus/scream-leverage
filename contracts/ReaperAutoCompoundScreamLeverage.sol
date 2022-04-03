@@ -2,6 +2,7 @@
 
 import './abstract/ReaperBaseStrategy.sol';
 import './interfaces/IUniswapRouter.sol';
+import './interfaces/IExcaliburRouter.sol';
 import './interfaces/CErc20I.sol';
 import './interfaces/IComptroller.sol';
 import "@openzeppelin/contracts-upgradeable/token/ERC20/utils/SafeERC20Upgradeable.sol";
@@ -28,10 +29,12 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
     /**
      * @dev Third Party Contracts:
-     * {UNI_ROUTER} - the UNI_ROUTER for target DEX
+     * {SPOOKY_ROUTER} - the SpookySwap router
+     * {EXCALIBUR_ROUTER} - the Excalibur router, for WFTM->UST
      * {comptroller} - Scream contract to enter market and to claim Scream tokens
      */
-    address public constant UNI_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
+    address public constant SPOOKY_ROUTER = 0xF491e7B69E4244ad4002BC14e878a34207E38c29;
+    address public constant EXCALIBUR_ROUTER = 0xc8Fe105cEB91e485fb0AC338F2994Ea655C78691;
     IComptroller public comptroller;
 
     /**
@@ -153,7 +156,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         if (rewards == 0) {
             return (0, 0);
         }
-        profit = IUniswapRouter(UNI_ROUTER).getAmountsOut(rewards, screamToWftmRoute)[1];
+        profit = IUniswapRouter(SPOOKY_ROUTER).getAmountsOut(rewards, screamToWftmRoute)[1];
         uint256 wftmFee = (profit * totalFee) / PERCENT_DIVISOR;
         callFeeToUser = (wftmFee * callFee) / PERCENT_DIVISOR;
         profit -= wftmFee;
@@ -675,7 +678,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function _swapRewardsToWftm() internal {
         uint256 screamBalance = IERC20Upgradeable(SCREAM).balanceOf(address(this));
         if (screamBalance >= minScreamToSell) {
-            IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            IUniswapRouter(SPOOKY_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
                 screamBalance,
                 0,
                 screamToWftmRoute,
@@ -714,10 +717,11 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         
         uint256 wftmBalance = IERC20Upgradeable(WFTM).balanceOf(address(this));
         if (wftmBalance != 0) {
-            IUniswapRouter(UNI_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
+            IExcaliburRouter(EXCALIBUR_ROUTER).swapExactTokensForTokensSupportingFeeOnTransferTokens(
                 wftmBalance,
                 0,
                 wftmToWantRoute,
+                address(this),
                 address(this),
                 block.timestamp + 600
             );
@@ -733,12 +737,12 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             type(uint256).max - IERC20Upgradeable(want).allowance(address(this), address(cWant))
         );
         IERC20Upgradeable(WFTM).safeIncreaseAllowance(
-            UNI_ROUTER,
-            type(uint256).max - IERC20Upgradeable(WFTM).allowance(address(this), UNI_ROUTER)
+            EXCALIBUR_ROUTER,
+            type(uint256).max - IERC20Upgradeable(WFTM).allowance(address(this), EXCALIBUR_ROUTER)
         );
         IERC20Upgradeable(SCREAM).safeIncreaseAllowance(
-            UNI_ROUTER,
-            type(uint256).max - IERC20Upgradeable(SCREAM).allowance(address(this), UNI_ROUTER)
+            SPOOKY_ROUTER,
+            type(uint256).max - IERC20Upgradeable(SCREAM).allowance(address(this), SPOOKY_ROUTER)
         );
     }
 
@@ -747,8 +751,8 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     function _removeAllowances() internal {
         IERC20Upgradeable(want).safeDecreaseAllowance(address(cWant), IERC20Upgradeable(want).allowance(address(this), address(cWant)));
-        IERC20Upgradeable(WFTM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(WFTM).allowance(address(this), UNI_ROUTER));
-        IERC20Upgradeable(SCREAM).safeDecreaseAllowance(UNI_ROUTER, IERC20Upgradeable(SCREAM).allowance(address(this), UNI_ROUTER));
+        IERC20Upgradeable(WFTM).safeDecreaseAllowance(EXCALIBUR_ROUTER, IERC20Upgradeable(WFTM).allowance(address(this), EXCALIBUR_ROUTER));
+        IERC20Upgradeable(SCREAM).safeDecreaseAllowance(SPOOKY_ROUTER, IERC20Upgradeable(SCREAM).allowance(address(this), SPOOKY_ROUTER));
     }
 
     /**
