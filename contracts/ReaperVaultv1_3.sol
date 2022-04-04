@@ -6,7 +6,7 @@ import "./interfaces/IStrategy.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
-import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/utils/Address.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
@@ -17,7 +17,7 @@ import "@openzeppelin/contracts/utils/math/SafeMath.sol";
  * The yield optimizing strategy itself is implemented in a separate 'Strategy.sol' contract.
  */
 contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
-    using SafeERC20 for IERC20Metadata;
+    using SafeERC20 for IERC20;
     using SafeMath for uint256;
 
     address public strategy;
@@ -34,7 +34,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     uint256 public constructionTime;
 
     // The token the vault accepts and looks to maximize.
-    IERC20Metadata public token;
+    IERC20 public token;
 
     /**
      * + WEBSITE DISCLAIMER +
@@ -88,7 +88,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
         uint256 _depositFee,
         uint256 _tvlCap
     ) ERC20(string(_name), string(_symbol)) {
-        token = IERC20Metadata(_token);
+        token = IERC20(_token);
         constructionTime = block.timestamp;
         depositFee = _depositFee;
         tvlCap = _tvlCap;
@@ -152,7 +152,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      */
     function getPricePerFullShare() public view returns (uint256) {
         return
-            totalSupply() == 0 ? 10**decimals() : balance().mul(10**decimals()).div(totalSupply());
+            totalSupply() == 0 ? 1e18 : balance().mul(1e18).div(totalSupply());
     }
 
     /**
@@ -281,11 +281,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
     function inCaseTokensGetStuck(address _token) external onlyOwner {
         require(_token != address(token), "!token");
 
-        uint256 amount = IERC20Metadata(_token).balanceOf(address(this));
-        IERC20Metadata(_token).safeTransfer(msg.sender, amount);
-    }
-
-    function decimals() public view override returns (uint8) {
-        return token.decimals();
+        uint256 amount = IERC20(_token).balanceOf(address(this));
+        IERC20(_token).safeTransfer(msg.sender, amount);
     }
 }
