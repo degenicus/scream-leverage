@@ -774,6 +774,9 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     modifier doUpdateBalance {
         _;
+        if (address(cWant) == address(0)) {
+            return;
+        }
         updateBalance();
     }
 }
