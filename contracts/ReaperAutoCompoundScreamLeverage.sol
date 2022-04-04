@@ -24,7 +24,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      */
     address public constant WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83;
     address public constant SCREAM = 0xe0654C8e6fd4D733349ac7E09f6f23DA256bF475;
-    address public constant want = 0x846e4d51d7e2043c1a87e0ab7490b93fb940357b;
+    address public constant want = 0x846e4D51d7E2043C1a87E0Ab7490B93FB940357b;
     CErc20I public cWant;
 
     /**
