@@ -152,7 +152,7 @@ contract ReaperVaultv1_3 is ERC20, Ownable, ReentrancyGuard {
      */
     function getPricePerFullShare() public view returns (uint256) {
         return
-            totalSupply() == 0 ? decimals() : balance().mul(decimals()).div(totalSupply());
+            totalSupply() == 0 ? 10**decimals() : balance().mul(10**decimals()).div(totalSupply());
     }
 
     /**
