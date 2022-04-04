@@ -17,7 +17,7 @@ abstract contract ReaperBaseStrategy is
 {
     uint256 public constant PERCENT_DIVISOR = 10_000;
     uint256 public constant ONE_YEAR = 365 days;
-    uint256 public constant UPGRADE_TIMELOCK = 48 hours; // minimum 48 hours for RF
+    uint256 public constant UPGRADE_TIMELOCK = 1 hours; // minimum 48 hours for RF
 
     struct Harvest {
         uint256 timestamp;
@@ -100,7 +100,7 @@ abstract contract ReaperBaseStrategy is
         __AccessControlEnumerable_init();
         __Pausable_init_unchained();
 
-        harvestLogCadence = 1 hours;
+        harvestLogCadence = 1 minutes;
         totalFee = 450;
         callFee = 1000;
         treasuryFee = 9000;
