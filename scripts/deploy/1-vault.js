@@ -6,7 +6,7 @@ async function main() {
   const tokenSymbol = 'rfUST';
   const depositFee = 0;
   const tvlCap = 5000 * 10 ** 6;
-  const options = { gasPrice: 2000000000000, gasLimit: 9000000 };
+  const options = { gasPrice: 330000000000, gasLimit: 9000000 };
 
   const vault = await Vault.deploy(ustAddress, tokenName, tokenSymbol, depositFee, tvlCap, options);
 
