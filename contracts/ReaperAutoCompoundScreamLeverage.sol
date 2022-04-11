@@ -114,16 +114,16 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         if (_shouldLeverage(_ltv)) {
             // Strategy is underleveraged so can withdraw underlying directly
-            _withdrawUnderlyingToVault(_withdrawAmount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount);
             _leverMax();
         } else if (_shouldDeleverage(_ltv)) {
             _deleverage(_withdrawAmount);
 
             // Strategy has deleveraged to the point where it can withdraw underlying
-            _withdrawUnderlyingToVault(_withdrawAmount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount);
         } else {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
-            _withdrawUnderlyingToVault(_withdrawAmount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount);
         }
     }
 
@@ -261,7 +261,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _swapToWant();
 
         _deleverage(type(uint256).max);
-        _withdrawUnderlyingToVault(balanceOfPool, false);
+        _withdrawUnderlyingToVault(balanceOfPool);
     }
 
     /**
@@ -495,7 +495,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Withdraws want to the vault by redeeming the underlying
      */
-    function _withdrawUnderlyingToVault(uint256 _withdrawAmount, bool _useWithdrawFee) internal {
+    function _withdrawUnderlyingToVault(uint256 _withdrawAmount) internal {
         uint256 initialWithdrawAmount = _withdrawAmount;
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
@@ -527,15 +527,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             }
         }
 
-        uint256 withdrawAmount;
-
-        if (_useWithdrawFee) {
-            uint256 withdrawFee = (_withdrawAmount * securityFee) / PERCENT_DIVISOR;
-            withdrawAmount = _withdrawAmount - withdrawFee - 1;
-        } else {
-            withdrawAmount = _withdrawAmount - 1;
-        }
-
+        uint256 withdrawAmount = _withdrawAmount - 1;
         if(withdrawAmount < initialWithdrawAmount) {
             require(
                 withdrawAmount >=
