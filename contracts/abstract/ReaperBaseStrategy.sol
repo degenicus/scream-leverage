@@ -50,12 +50,9 @@ abstract contract ReaperBaseStrategy is
      * {MAX_FEE} - Maximum fee allowed by the strategy. Hard-capped at 10%.
      * {STRATEGIST_MAX_FEE} - Maximum strategist fee allowed by the strategy (as % of treasury fee).
      *                        Hard-capped at 50%
-     * {MAX_SECURITY_FEE} - Maximum security fee charged on withdrawal to prevent
-     *                      flash deposit/harvest attacks.
      */
     uint256 public constant MAX_FEE = 1000;
     uint256 public constant STRATEGIST_MAX_FEE = 5000;
-    uint256 public constant MAX_SECURITY_FEE = 10;
 
     /**
      * @dev Distribution of fees earned, expressed as % of the profit from each harvest.
@@ -73,7 +70,7 @@ abstract contract ReaperBaseStrategy is
     uint256 public callFee;
     uint256 public treasuryFee;
     uint256 public strategistFee;
-    uint256 public securityFee;
+    uint256 public securityFee; // unused but cannot remove between upgrades
 
     /**
      * {TotalFeeUpdated} Event that is fired each time the total fee is updated.
@@ -200,11 +197,6 @@ abstract contract ReaperBaseStrategy is
         strategistFee = _strategistFee;
         emit FeesUpdated(callFee, treasuryFee, strategistFee);
         return true;
-    }
-
-    function updateSecurityFee(uint256 _securityFee) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_securityFee <= MAX_SECURITY_FEE, "fee to high!");
-        securityFee = _securityFee;
     }
 
     /**
