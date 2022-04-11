@@ -119,16 +119,16 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         if (_shouldLeverage(_ltv)) {
             // Strategy is underleveraged so can withdraw underlying directly
-            _withdrawUnderlyingToVault(_withdrawAmount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount);
             _leverMax();
         } else if (_shouldDeleverage(_ltv)) {
             _deleverage(_withdrawAmount);
 
             // Strategy has deleveraged to the point where it can withdraw underlying
-            _withdrawUnderlyingToVault(_withdrawAmount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount);
         } else {
             // LTV is in the acceptable range so the underlying can be withdrawn directly
-            _withdrawUnderlyingToVault(_withdrawAmount, true);
+            _withdrawUnderlyingToVault(_withdrawAmount);
         }
     }
 
@@ -266,7 +266,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
         _swapToWant();
 
         _deleverage(type(uint256).max);
-        _withdrawUnderlyingToVault(balanceOfPool, false);
+        _withdrawUnderlyingToVault(balanceOfPool);
     }
 
     /**
@@ -346,20 +346,20 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
      *      It is not 100% accurate as it uses current balances in Compound to predict into the past.
      */
     function predictScreamAccrued() public view returns (uint256) {
-        // Has no previous log to compare harvest time to
-        if (harvestLog.length == 0) {
+        // Has no previous harvest to calculate accrual
+        if (lastHarvestTimestamp == 0) {
             return 0;
         }
+
         (uint256 supplied, uint256 borrowed) = getCurrentPosition();
         if (supplied == 0) {
             return 0; // should be impossible to have 0 balance and positive comp accrued
         }
 
         uint256 distributionPerBlock = comptroller.compSpeeds(address(cWant));
-
         uint256 totalBorrow = cWant.totalBorrows();
 
-        //total supply needs to be exchanged to underlying using exchange rate
+        // total supply needs to be exchanged to underlying using exchange rate
         uint256 totalSupplyCtoken = cWant.totalSupply();
         uint256 totalSupply = totalSupplyCtoken
             * cWant.exchangeRateStored()
@@ -375,13 +375,10 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             blockShareBorrow = borrowed * distributionPerBlock / totalBorrow;
         }
 
-        //how much we expect to earn per block
+        // How much we expect to earn per block
         uint256 blockShare = blockShareSupply + blockShareBorrow;
         uint256 secondsPerBlock = 1; // Average FTM block speed
-
-        //last time we ran harvest
-        uint256 lastHarvestTime = harvestLog[harvestLog.length - 1].timestamp;
-        uint256 blocksSinceLast = block.timestamp - lastHarvestTime / secondsPerBlock;
+        uint256 blocksSinceLast = block.timestamp - lastHarvestTimestamp / secondsPerBlock;
 
         return blocksSinceLast * blockShare;
     }
@@ -500,7 +497,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     /**
      * @dev Withdraws want to the vault by redeeming the underlying
      */
-    function _withdrawUnderlyingToVault(uint256 _withdrawAmount, bool _useWithdrawFee) internal {
+    function _withdrawUnderlyingToVault(uint256 _withdrawAmount) internal {
         uint256 initialWithdrawAmount = _withdrawAmount;
         uint256 supplied = cWant.balanceOfUnderlying(address(this));
         uint256 borrowed = cWant.borrowBalanceStored(address(this));
@@ -532,15 +529,7 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
             }
         }
 
-        uint256 withdrawAmount;
-
-        if (_useWithdrawFee) {
-            uint256 withdrawFee = (_withdrawAmount * securityFee) / PERCENT_DIVISOR;
-            withdrawAmount = _withdrawAmount - withdrawFee - 1;
-        } else {
-            withdrawAmount = _withdrawAmount - 1;
-        }
-
+        uint256 withdrawAmount = _withdrawAmount - 1;
         if(withdrawAmount < initialWithdrawAmount) {
             require(
                 withdrawAmount >=
