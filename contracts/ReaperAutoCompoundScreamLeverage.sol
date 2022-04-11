@@ -353,7 +353,12 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
 
         uint256 distributionPerBlock = comptroller.compSpeeds(address(cWant));
         uint256 totalBorrow = cWant.totalBorrows();
-        uint256 totalSupply = totalBorrow + cWant.getCash();
+
+        // total supply needs to be exchanged to underlying using exchange rate
+        uint256 totalSupplyCtoken = cWant.totalSupply();
+        uint256 totalSupply = totalSupplyCtoken
+            * cWant.exchangeRateStored()
+            / MANTISSA;
 
         uint256 blockShareSupply = 0;
         if (totalSupply > 0) {
