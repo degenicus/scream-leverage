@@ -110,6 +110,12 @@ contract ReaperAutoCompoundScreamLeverage is ReaperBaseStrategy {
     function withdraw(uint256 _withdrawAmount) external doUpdateBalance {
         require(msg.sender == vault);
 
+        uint256 wantBalance = IERC20Upgradeable(want).balanceOf(address(this));
+        if (_withdrawAmount <= wantBalance) {
+            IERC20Upgradeable(want).safeTransfer(vault, _withdrawAmount);
+            return;
+        }
+
         uint256 _ltv = _calculateLTVAfterWithdraw(_withdrawAmount);
 
         if (_shouldLeverage(_ltv)) {
