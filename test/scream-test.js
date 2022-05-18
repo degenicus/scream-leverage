@@ -30,10 +30,12 @@ describe('Vaults', function () {
   // const FUSD = "0xad84341756bf337f5a0164515b1f6f993d194e1f";
   // const daiAddress = "0x8d11ec38a3eb5e956b052f67da8bdc9bef8abf3e";
   // const scDaiAddress = "0x8D9AED9882b4953a0c9fa920168fa1FDfA0eBE75";
-  const usdcAddress = '0x04068da6c83afcfa0e13ba15a6696662335d5b75';
-  const scUSDCAddress = '0xE45Ac34E528907d0A0239ab5Db507688070B20bf';
-  const wantAddress = usdcAddress;
-  const scWantAddress = scUSDCAddress;
+  // const usdcAddress = '0x04068da6c83afcfa0e13ba15a6696662335d5b75';
+  // const scUSDCAddress = '0xE45Ac34E528907d0A0239ab5Db507688070B20bf';
+  const fusdtAddress = '0x049d68029688eAbF473097a2fC38ef61633A3C7A';
+  const scfUSDTAddress = '0x02224765BC8D54C21BB51b0951c80315E1c263F9';
+  const wantAddress = fusdtAddress;
+  const scWantAddress = scfUSDTAddress;
   let self;
   let wantWhale;
   let selfAddress;
@@ -48,7 +50,7 @@ describe('Vaults', function () {
         {
           forking: {
             jsonRpcUrl: 'https://rpc.ftm.tools/',
-            blockNumber: 34485212,
+            blockNumber: 38482438,
           },
         },
       ],
@@ -60,7 +62,7 @@ describe('Vaults', function () {
     // const wantWhaleAddress = "0x93c08a3168fc469f3fc165cd3a471d19a37ca19e"; // dai
     // const wantHolder = "0x3b7994f623a02617cf1053161d14dc881e1aa02c"; // fusd
     // const wantWhaleAddress = "0x8d7e07b1a346ac29e922ac01fa34cb2029f536b9"; // fusd
-    const wantHolder = '0xadbeb26c852bb3c41a59078a38ec562b155bb364'; // usdc
+    const wantHolder = '0x0e4F54926E80bBc913c9757fda379DF447410751'; // usdc
     const wantWhaleAddress = '0xb31D334eec186D29C196dA7cF7069486CEB0D122'; // usdc
     const strategistAddress = '0x3b410908e71Ee04e7dE2a87f8F9003AFe6c1c7cE';
     await hre.network.provider.request({
@@ -131,7 +133,71 @@ describe('Vaults', function () {
     await vault.connect(wantWhale).approve(vault.address, ethers.utils.parseEther('1000000000'));
   });
 
-  describe('Deploying the vault and strategy', function () {
+  describe('Current conditions', function () {
+    xit ('largest holder withdrawing fails', async function () {
+      vault = Vault.attach('0xE56998F7C797577b44B067e6f3F2f3eBD34c3b16');
+      strategy = Strategy.attach('0xdd9D8D594d73eB2638B8FDd9311cc9f58b572202');
+      await hre.network.provider.request({
+        method: 'hardhat_impersonateAccount',
+        params: ['0x33cae2a52083681dce63cfc22951bdab912ff93c'],
+      });
+      const largestHolder = await ethers.provider.getSigner('0x33cae2a52083681dce63cfc22951bdab912ff93c');
+      await expect(vault.connect(largestHolder).withdrawAll()).to.be.reverted;
+    });
+
+    it ('largest holder withdrawing passes after upgrade', async function () {
+      vault = Vault.attach('0xE56998F7C797577b44B067e6f3F2f3eBD34c3b16');
+      strategy = Strategy.attach('0xdd9D8D594d73eB2638B8FDd9311cc9f58b572202');
+      await hre.network.provider.request({
+        method: 'hardhat_impersonateAccount',
+        params: ['0x3b410908e71ee04e7de2a87f8f9003afe6c1c7ce'],
+      });
+      const tess = await ethers.provider.getSigner('0x3b410908e71ee04e7de2a87f8f9003afe6c1c7ce');
+
+      await moveTimeForward(3600 * 24);
+
+      const StrategyV2 = await ethers.getContractFactory('Upgrade');
+      await hre.upgrades.forceImport('0xdd9D8D594d73eB2638B8FDd9311cc9f58b572202', Strategy);
+      const newImpl = await hre.upgrades.prepareUpgrade(strategy.address, StrategyV2);
+      await strategy.connect(tess).upgradeTo(newImpl);
+      strategy = StrategyV2.attach('0xdd9D8D594d73eB2638B8FDd9311cc9f58b572202');
+
+      const holders = [
+        '0x33cae2a52083681dce63cfc22951bdab912ff93c',
+        '0xb494a9c3c8d0c3a4e10d51b383184099b31eb5a4',
+        '0x2ea2ce595bd68a0cd1fd34b06df98970952fe4d2',
+        '0x6539519e69343535a2af6583d9bae3ad74c6a293',
+        '0xc00a6614b8030ce216302016e11c6b4140b5e499'
+      ];
+      // NOTE last withdraw will fail because of 79 cents still sitting in Scream
+      // no big deal
+      // cannot do anything about those 79 cents at the moment because scream redemptions
+      // and borrows are paused (already tried manualDeleverage and manualReleaseWant)
+
+      for(let i = 0; i < holders.length; i++) {
+        // send ftm in case account doesn't have enough
+        const tx = await strategist.sendTransaction({
+          to: holders[i],
+          value: ethers.utils.parseEther('1.2'),
+        });
+        await tx.wait();
+
+        // impersonate and withdraw
+        await hre.network.provider.request({
+          method: 'hardhat_impersonateAccount',
+          params: [holders[i]],
+        });
+        const holder_i = await ethers.provider.getSigner(holders[i]);
+        const balBefore = await want.balanceOf(holders[i]);
+        await vault.connect(holder_i).withdrawAll();
+        const balAfter = await want.balanceOf(holders[i]);
+        const diff = ethers.utils.formatUnits(balAfter.sub(balBefore), 6);
+        console.log(`${holders[i]} withdrew ${diff}`);
+      }
+    });
+  });
+
+  xdescribe('Deploying the vault and strategy', function () {
     it('should initiate vault with a 0 balance', async function () {
       console.log(1);
       const totalBalance = await vault.balance();
@@ -147,7 +213,7 @@ describe('Vaults', function () {
       expect(pricePerFullShare).to.equal(ethers.utils.parseEther('1'));
     });
   });
-  describe('Vault Tests', function () {
+  xdescribe('Vault Tests', function () {
     it('should allow deposits and account for them correctly', async function () {
       const userBalance = await want.balanceOf(selfAddress);
       console.log(`userBalance: ${userBalance}`);
@@ -430,7 +496,7 @@ describe('Vaults', function () {
       console.log(`Average APR across ${numHarvests} harvests is ${averageAPR} basis points.`);
     });
   });
-  describe('Strategy', function () {
+  xdescribe('Strategy', function () {
     it('should be able to pause and unpause', async function () {
       await strategy.pause();
       const depositAmount = toWantUnit('.05', true);
